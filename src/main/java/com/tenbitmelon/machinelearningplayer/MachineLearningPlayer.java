@@ -8,6 +8,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bytedeco.pytorch.*;
 
 import static org.bytedeco.pytorch.global.torch.nll_loss;
 

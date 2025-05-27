@@ -1,14 +1,13 @@
 package com.tenbitmelon.machinelearningplayer;
 
 import com.mojang.brigadier.Command;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
 @SuppressWarnings("UnstableApiUsage")
@@ -20,27 +19,31 @@ public class MachineLearningCommand {
                     ctx.getSource().getSender().sendPlainMessage("[STATS]");
                     return Command.SINGLE_SUCCESS;
                 });
-        commandBuilder.then(Commands.literal("rooms")
+
+        commandBuilder.then(Commands.literal("setup")
             .executes(ctx -> {
-                ctx.getSource().getSender().sendPlainMessage("[ROOMS]");
+                Location location = ctx.getSource().getLocation();
+                World world = location.getWorld();
+
+                world.setTime(0);
+                world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+                world.setWeatherDuration(0);
+                world.setStorm(false);
+                world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
+                world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+
+                for (Entity entity : world.getEntities()) {
+                    if (entity instanceof Player) {
+                        entity.teleport(new Location(world, 0, 1, 0));
+                        continue;
+                    }
+                    entity.remove();
+                }
+
+                createRooms(ctx, world, 16);
                 return Command.SINGLE_SUCCESS;
-            }).then(Commands.literal("create")
-                .executes(ctx -> {
-                    ctx.getSource().getSender().sendPlainMessage("[ROOMS] Creating...");
-                    generateNoiseSquares(ctx.getSource().getLocation(), 50);
-                    ctx.getSource().getSender().sendPlainMessage("[ROOMS] Created 1 room.");
-                    return Command.SINGLE_SUCCESS;
-                })
-                .then(Commands.argument("amount", IntegerArgumentType.integer(1))
-                    .executes(ctx -> {
-                        int amount = IntegerArgumentType.getInteger(ctx, "amount");
-                        generateNoiseSquares(ctx.getSource().getLocation(), amount);
-                        ctx.getSource().getSender().sendPlainMessage("[ROOMS] Created " + amount + " rooms.");
-                        return Command.SINGLE_SUCCESS;
-                    })))).then(Commands.literal("edit").executes(ctx -> {
-            ctx.getSource().getSender().sendPlainMessage("[ROOMS] Edit mode enabled.");
-            return Command.SINGLE_SUCCESS;
-        }));
+            }));
+
         commandBuilder.then(Commands.literal("train")
             .executes(ctx -> {
                 ctx.getSource().getSender().sendPlainMessage("[TRAIN] Training started.");
@@ -56,110 +59,58 @@ public class MachineLearningCommand {
         return commandBuilder.build();
     }
 
-    private static final Material[] PASTEL_BLOCKS = {
-        Material.PINK_CONCRETE,          // Light pink
-        Material.LIME_CONCRETE,          // Light green
-        Material.LIGHT_BLUE_CONCRETE,    // Light blue
-        Material.YELLOW_CONCRETE,        // Light yellow
-        Material.MAGENTA_CONCRETE,       // Light magenta
-        Material.CYAN_CONCRETE,          // Light cyan
-        Material.ORANGE_CONCRETE,        // Light peach/orange
-        Material.PURPLE_CONCRETE         // Light lavender/purple
-    };
+    public static void createRooms(CommandContext<CommandSourceStack> ctx, World world, int count) {
+        Location location = new Location(world, 0, 0, 0);
+        int gridWidth = (int) Math.ceil(Math.sqrt(count));
 
-    /**
-     * Simple noise function equivalent to the Python version
-     * @param x X coordinate
-     * @param y Y coordinate
-     * @param scale Scale factor for the noise
-     * @return Noise value between 0 and 1
-     */
-    private static double simpleNoise(int x, int y, double scale) {
-        return (Math.sin(x * scale) * Math.cos(y * scale) + 1) / 2;
-    }
+        for (int i = 0; i < count; i++) {
+            int offsetX = (i % gridWidth) * 16;
+            int offsetZ = (i / gridWidth) * 16;
 
-    public static void generateNoiseSquares(Location playerLoc, int halfSize) {
-        World world = playerLoc.getWorld();
-
-        if (world == null) {
-            return;
-        }
-
-        int centerX = playerLoc.getBlockX();
-        int centerZ = playerLoc.getBlockZ();
-        int playerY = playerLoc.getBlockY();
-
-        for (int offsetX = -halfSize; offsetX < halfSize; offsetX++) {
-            for (int offsetZ = -halfSize; offsetZ < halfSize; offsetZ++) {
-
-                int worldX = centerX + offsetX;
-                int worldZ = centerZ + offsetZ;
-
-                double sizeNoise = simpleNoise(worldX, worldZ, 0.02);
-                int squareSize = (int)(4 + sizeNoise * 20);
-
-                int gridX = (worldX / squareSize);
-                int gridZ = (worldZ / squareSize);
-
-                int colorIndex = ((gridX + gridZ) % PASTEL_BLOCKS.length + PASTEL_BLOCKS.length) % PASTEL_BLOCKS.length;
-                Material blockType = PASTEL_BLOCKS[colorIndex];
-
-                // Block highestBlockAt = world.getHighestBlockAt(worldX, worldZ);
-
-                Location blockLoc = new Location(world, worldX, playerY, worldZ);
-                world.getBlockAt(blockLoc).setType(blockType);
-            }
+            Location roomLocation = location.clone().add(offsetX, 0, offsetZ);
+            createRoom(ctx, roomLocation);
         }
     }
 
-    /**
-     * Alternative version that generates on multiple Y levels (like a 3D area)
-     * @param player The player to center the generation around
-     * @param height How many blocks high to generate (default: 1)
-     */
-    public static void generateNoiseSquares3D(Player player, int height) {
-        Location playerLoc = player.getLocation();
-        World world = playerLoc.getWorld();
+    public static void createRoom(CommandContext<CommandSourceStack> ctx, Location location) {
+        Chunk chunk = location.getChunk();
+        World world = location.getWorld();
+        chunk.load();
 
-        if (world == null) {
-            return;
-        }
+        int startX = chunk.getX() * 16;
+        int startZ = chunk.getZ() * 16;
 
-        int centerX = playerLoc.getBlockX();
-        int centerZ = playerLoc.getBlockZ();
-        int startY = playerLoc.getBlockY();
-
-        int halfSize = 50;
-
-        // Generate for multiple Y levels
-        for (int y = 0; y < height; y++) {
-            for (int offsetX = -halfSize; offsetX < halfSize; offsetX++) {
-                for (int offsetZ = -halfSize; offsetZ < halfSize; offsetZ++) {
-
-                    int worldX = centerX + offsetX;
-                    int worldZ = centerZ + offsetZ;
-                    int worldY = startY + y;
-
-                    int localX = offsetX + halfSize;
-                    int localZ = offsetZ + halfSize;
-
-                    // Use Y level to slightly modify the noise for variation
-                    double sizeNoise = simpleNoise(localX, localZ + y * 10, 0.02);
-                    int squareSize = (int)(4 + sizeNoise * 20);
-
-                    int gridX = (localX / squareSize) * squareSize;
-                    int gridZ = (localZ / squareSize) * squareSize;
-
-                    // Include Y level in color selection for 3D variation
-                    int colorIndex = (gridX / squareSize + gridZ / squareSize + y) % PASTEL_BLOCKS.length;
-                    Material blockType = PASTEL_BLOCKS[colorIndex];
-
-                    Location blockLoc = new Location(world, worldX, worldY, worldZ);
-                    world.getBlockAt(blockLoc).setType(blockType);
+        for (int x = 0; x < 16; x++) {
+            for (int z = 0; z < 16; z++) {
+                for (int y = -16; y < 64; y++) {
+                    world.getBlockAt(startX + x, y, startZ + z).setType(Material.AIR);
                 }
             }
         }
 
-        player.sendMessage("§aGenerated 3D noise-based squares in 100x100x" + height + " area!");
+        for (int offsetX = 0; offsetX < 16; offsetX++) {
+            for (int offsetZ = 0; offsetZ < 16; offsetZ++) {
+
+                int worldX = startX + offsetX;
+                int worldZ = startZ + offsetZ;
+
+                world.getBlockAt(worldX, 0, worldZ).setType(Material.BARRIER);
+
+                if (offsetX > 4 && offsetX < 12 && offsetZ > 4 && offsetZ < 12) {
+                    world.getBlockAt(worldX, 0, worldZ).setType(Material.WHITE_CONCRETE);
+                }
+
+            }
+        }
+        world.getBlockAt(startX + 8, 0, startZ + 8).setType(Material.GOLD_BLOCK);
+        world.getBlockAt(startX + 8, -1, startZ + 8).setType(Material.BEACON);
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                world.getBlockAt(startX + 8 + x, -2, startZ + 8 + z).setType(Material.IRON_BLOCK);
+            }
+        }
+
+        // world.spawn(new Location(location.getWorld(), startX + 8.5, 1.5, startZ + 8.5), ArmorStand.class);
+        Agent.spawn(ctx, new Location(location.getWorld(), startX + 8.5, 1.5, startZ + 8.5));
     }
 }
