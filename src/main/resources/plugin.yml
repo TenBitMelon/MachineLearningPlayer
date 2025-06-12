@@ -2,4 +2,6 @@ name: MachineLearningPlayer
 version: '1.0-SNAPSHOT'
 main: com.tenbitmelon.machinelearningplayer.MachineLearningPlayer
 api-version: '1.21.5'
-description: A player that does parkour
+author: TenBitMelon
+description: A player that uses machine learning.
+load: POSTWORLD

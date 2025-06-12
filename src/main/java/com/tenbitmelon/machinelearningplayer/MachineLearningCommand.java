@@ -4,62 +4,30 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import com.tenbitmelon.machinelearningplayer.agent.Agent;
+import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import net.minecraft.server.MinecraftServer;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 @SuppressWarnings("UnstableApiUsage")
 public class MachineLearningCommand {
 
     public static LiteralCommandNode<CommandSourceStack> register() {
         LiteralArgumentBuilder<CommandSourceStack> commandBuilder = Commands.literal("ml")
-                .executes(ctx -> {
-                    ctx.getSource().getSender().sendPlainMessage("[STATS]");
-                    return Command.SINGLE_SUCCESS;
-                });
-
-        commandBuilder.then(Commands.literal("setup")
             .executes(ctx -> {
-                Location location = ctx.getSource().getLocation();
-                World world = location.getWorld();
-
-                world.setTime(0);
-                world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
-                world.setWeatherDuration(0);
-                world.setStorm(false);
-                world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
-                world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
-
-                for (Entity entity : world.getEntities()) {
-                    if (entity instanceof Player) {
-                        entity.teleport(new Location(world, 0, 1, 0));
-                        continue;
-                    }
-                    entity.remove();
-                }
-
-                createRooms(ctx, world, 16);
+                ctx.getSource().getSender().sendPlainMessage("[STATS]");
                 return Command.SINGLE_SUCCESS;
-            }));
-
-        commandBuilder.then(Commands.literal("train")
-            .executes(ctx -> {
-                ctx.getSource().getSender().sendPlainMessage("[TRAIN] Training started.");
-                // Here you would add the logic to start training your model.
-                return Command.SINGLE_SUCCESS;
-            }).then(Commands.literal("stop")
-                .executes(ctx -> {
-                    ctx.getSource().getSender().sendPlainMessage("[TRAIN] Training stopped.");
-                    // Here you would add the logic to stop training your model.
-                    return Command.SINGLE_SUCCESS;
-                })));
+            });
 
         return commandBuilder.build();
     }
 
-    public static void createRooms(CommandContext<CommandSourceStack> ctx, World world, int count) {
+    public static void createRooms(MinecraftServer server, World world, int count) {
         Location location = new Location(world, 0, 0, 0);
         int gridWidth = (int) Math.ceil(Math.sqrt(count));
 
@@ -68,11 +36,11 @@ public class MachineLearningCommand {
             int offsetZ = (i / gridWidth) * 16;
 
             Location roomLocation = location.clone().add(offsetX, 0, offsetZ);
-            createRoom(ctx, roomLocation);
+            createRoom(server, roomLocation);
         }
     }
 
-    public static void createRoom(CommandContext<CommandSourceStack> ctx, Location location) {
+    public static void createRoom(MinecraftServer server, Location location) {
         Chunk chunk = location.getChunk();
         World world = location.getWorld();
         chunk.load();
@@ -111,6 +79,6 @@ public class MachineLearningCommand {
         }
 
         // world.spawn(new Location(location.getWorld(), startX + 8.5, 1.5, startZ + 8.5), ArmorStand.class);
-        Agent.spawn(ctx, new Location(location.getWorld(), startX + 8.5, 1.5, startZ + 8.5));
+        Agent.spawn(server, new Location(location.getWorld(), startX + 8.5, 1.5, startZ + 8.5));
     }
 }

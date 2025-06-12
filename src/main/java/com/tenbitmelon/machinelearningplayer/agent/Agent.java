@@ -1,20 +1,19 @@
-package com.tenbitmelon.machinelearningplayer;
+package com.tenbitmelon.machinelearningplayer.agent;
 
 import com.mojang.authlib.GameProfile;
-import com.mojang.brigadier.context.CommandContext;
-import io.papermc.paper.command.brigadier.CommandSourceStack;
-import net.kyori.adventure.text.TextComponent;
-import net.minecraft.commands.arguments.GameModeArgument;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.CounterControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.DisconnectionDetails;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.contents.TranslatableContents;
+import net.kyori.adventure.text.Component;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
 import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ClientInformation;
@@ -30,37 +29,45 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.food.FoodData;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.SkullBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.portal.TeleportTransition;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.craftbukkit.CraftServer;
+import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @SuppressWarnings("UnstableApiUsage")
 public class Agent extends ServerPlayer {
 
-    public Runnable fixStartingPosition = () -> {};
+    public final EntityPlayerActionPack actionPack = new EntityPlayerActionPack(this);
+    int counter = 0;
+    boolean toggle = false;
+    ControlsWindow debugWindow = new ControlsWindow();
+    private boolean ready = false;
 
     public Agent(MinecraftServer server, ServerLevel level, GameProfile gameProfile, ClientInformation clientInformation) {
         super(server, level, gameProfile, clientInformation);
+
+        debugWindow.addControl(new CounterControl(Component.text("Counter"), () -> this.counter, (value) -> this.counter = value));
+        debugWindow.addControl(new BooleanControl(Component.text("Toggle"), () -> this.toggle, (value) -> this.toggle = value));
+        debugWindow.addText("Agent: " + this.getName().getString());
+        debugWindow.addControl(new VariableControl(Component.text("Health"), () -> this.getHealth() + "/" + this.getMaxHealth()));
+        // debugWindow.addControl(new ButtonControl(Component.text("Toggle HUD"), this::toggleHUD));
     }
 
-    public static void spawn(CommandContext<CommandSourceStack> context, Location location) {
-        System.out.println("Spawning MLPlayer at " + location);
-        GameType gamemode = GameType.CREATIVE;
+    public static CompletableFuture<Agent> spawn(MinecraftServer server, Location location) {
+        CompletableFuture<Agent> agentFuture = new CompletableFuture<>();
 
-        CommandSourceStack source = context.getSource();
-        MinecraftServer server = ((CraftServer) source.getExecutor().getServer()).getServer();
-        String username = "MLPlayer_" + UUIDUtil.createOfflinePlayerUUID("MLPlayer").toString().substring(0, 8);
-
+        String username = UUID.randomUUID().toString().substring(0, 3);
 
         // -- Stolen from Carpet Mod: https://github.com/gnembon/fabric-carpet --
 
-        // prolly half of that crap is not necessary, but it works
         ServerLevel worldIn = server.overworld();
         GameProfileCache.setUsesAuthentication(false);
         GameProfile gameprofile;
@@ -73,68 +80,52 @@ public class Agent extends ServerPlayer {
             gameprofile = new GameProfile(UUIDUtil.createOfflinePlayerUUID(username), username);
         }
         GameProfile finalGP = gameprofile;
-
-        // We need to mark this player as spawning so that we do not
-        // try to spawn another player with the name while the profile
-        // is being fetched - preventing multiple players spawning
         String name = gameprofile.getName();
 
-        System.out.println("Starting callback");
-
         SkullBlockEntity.fetchGameProfile(name).whenCompleteAsync((p, t) -> {
-            try {
-                System.out.println("Callback completed");
-                // Always remove the name, even if exception occurs
-                if (t != null) {
-                    return;
-                }
-
-                GameProfile current = finalGP;
-                if (p.isPresent()) {
-                    current = p.get();
-                }
-
-                System.out.println("Creating Agent instance");
-
-                Agent instance = new Agent(server, worldIn, current, ClientInformation.createDefault());
-                System.out.println("1");
-                instance.fixStartingPosition = () -> instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
-                System.out.println("2");
-                server.getPlayerList().placeNewPlayer(new FakeClientConnection(PacketFlow.SERVERBOUND), instance, new CommonListenerCookie(current, 0, instance.clientInformation(), false));
-                System.out.println("3");
-                instance.teleportTo(worldIn, location.getX(), location.getY(), location.getZ(), Set.of(), 0.0f, 0.0f, true);
-                System.out.println("4");
-                instance.setHealth(20.0F);
-                System.out.println("5");
-                instance.unsetRemoved();
-                System.out.println("6");
-                instance.getAttribute(Attributes.STEP_HEIGHT).setBaseValue(0.6F);
-                System.out.println("7");
-                instance.gameMode.changeGameModeForPlayer(gamemode, PlayerGameModeChangeEvent.Cause.DEFAULT_GAMEMODE, null);
-                System.out.println("8");
-                server.getPlayerList().broadcastAll(new ClientboundRotateHeadPacket(instance, (byte) (instance.yHeadRot * 256 / 360)));// instance.dimension);
-                System.out.println("9");
-                server.getPlayerList().broadcastAll(ClientboundEntityPositionSyncPacket.of(instance));// instance.dimension);
-                System.out.println("10");
-                // instance.world.getChunkManager(). updatePosition(instance);
-                System.out.println("11");
-                instance.entityData.set(DATA_PLAYER_MODE_CUSTOMISATION, (byte) 0x7f); // show all model layers (incl. capes)
-                System.out.println("12");
-
-                System.out.println("Done!");
-            } catch (Exception e) {
-                e.printStackTrace();
-                System.out.println("Failed to spawn MLPlayer: " + e.getMessage());
+            if (t != null) {
+                agentFuture.completeExceptionally(t);
+                return;
             }
+
+            GameProfile current = finalGP;
+            if (p.isPresent()) {
+                current = p.get();
+            }
+
+            Agent instance = new Agent(server, worldIn, current, ClientInformation.createDefault());
+            instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
+            server.getPlayerList().placeNewPlayer(new FakeClientConnection(instance, PacketFlow.SERVERBOUND), instance, new CommonListenerCookie(current, 0, instance.clientInformation(), false));
+            instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
+            instance.teleportTo(worldIn, location.getX(), location.getY(), location.getZ(), Set.of(), 0.0f, 0.0f, true);
+            instance.setHealth(20.0F);
+            instance.unsetRemoved();
+            instance.getAttribute(Attributes.STEP_HEIGHT).setBaseValue(0.6F);
+            instance.gameMode.changeGameModeForPlayer(GameType.SURVIVAL, PlayerGameModeChangeEvent.Cause.PLUGIN, null);
+            server.getPlayerList().broadcastAll(new ClientboundRotateHeadPacket(instance, (byte) (instance.yHeadRot * 256 / 360)));
+            server.getPlayerList().broadcastAll(ClientboundEntityPositionSyncPacket.of(instance));
+            instance.entityData.set(DATA_PLAYER_MODE_CUSTOMISATION, (byte) 0x7f); // show all model layers (incl. capes)
+            instance.debugWindow.setAnchor(Bukkit.getEntity(instance.getUUID()));
+
+            instance.ready = true;
+
+            agentFuture.complete(instance);
         }, server);
+
+        return agentFuture;
     }
+
+    public boolean isReady() {
+        return ready;
+    }
+
 
     @Override
     public void onEquipItem(final EquipmentSlot slot, final ItemStack previous, final ItemStack stack) {
         if (!isUsingItem()) super.onEquipItem(slot, previous, stack);
     }
 
-    public void kill(Component reason) {
+    public void kill(net.minecraft.network.chat.Component reason) {
         shakeOff();
 
         this.getServer().schedule(new TickTask(this.getServer().getTickCount(), () -> {
@@ -144,9 +135,10 @@ public class Agent extends ServerPlayer {
 
     @Override
     public void tick() {
+        actionPack.onUpdate();
         if (this.getServer().getTickCount() % 10 == 0) {
             this.connection.resetPosition();
-            // this.level().getChunkSource().move(this);
+            this.serverLevel().getChunkSource().move(this);
         }
         try {
             super.tick();
@@ -156,7 +148,9 @@ public class Agent extends ServerPlayer {
             // the game not gonna crash violently.
         }
 
-
+        // debugWindow.setLine(0, Component.text("Agent: " + this.getName().getString()));
+        // debugWindow.setLine(1, Component.text("Health: " + this.getHealth() + "/" + this.getMaxHealth()));
+        // debugWindow.setLine(2, Component.text("Food: " + this.foodData.getFoodLevel() + "|" + this.foodData.getSaturationLevel()));
     }
 
     private void shakeOff() {
@@ -206,7 +200,16 @@ public class Agent extends ServerPlayer {
         return connection.player;
     }
 
-    public static Agent respawnFake(MinecraftServer server, ServerLevel level, GameProfile profile, ClientInformation cli) {
-        return new Agent(server, level, profile, cli);
+    public EntityPlayerActionPack getActionPack() {
+        return this.actionPack;
+    }
+
+    public void reset(Location location) {
+        this.reset();
+        this.actionPack.stopAll();
+
+        this.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
+        this.teleportTo(((CraftWorld) location.getWorld()).getHandle(), location.getX(), location.getY(), location.getZ(), Set.of(), 0.0f, 0.0f, true);
+        this.setHealth(20.0F);
     }
 }

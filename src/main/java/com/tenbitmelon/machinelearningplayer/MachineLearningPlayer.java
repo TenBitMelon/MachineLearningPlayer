@@ -1,34 +1,93 @@
 package com.tenbitmelon.machinelearningplayer;
 
+import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
+import com.tenbitmelon.machinelearningplayer.events.EntityInteractEvent;
+import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
-import org.bukkit.Bukkit;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.ServerTickRateManager;
+import net.minecraft.server.dedicated.DedicatedPlayerList;
+import net.minecraft.server.dedicated.DedicatedServer;
+import org.bukkit.*;
+import org.bukkit.craftbukkit.CraftServer;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.bytedeco.pytorch.*;
+import org.bytedeco.pytorch.Module;
 
-import static org.bytedeco.pytorch.global.torch.nll_loss;
+import static com.tenbitmelon.machinelearningplayer.MachineLearningCommand.createRooms;
+import static org.bytedeco.pytorch.global.torch.*;
 
 @SuppressWarnings("UnstableApiUsage")
 public final class MachineLearningPlayer extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        Bukkit.getPluginManager().registerEvents(this, this);
+        System.setProperty("org.bytedeco.openblas.load", "mkl");
+
+        PluginManager pluginManager = getServer().getPluginManager();
+        pluginManager.registerEvents(this, this);
+        pluginManager.registerEvents(new EntityInteractEvent(), this);
+        pluginManager.registerEvents(Debugger.DebugListener.INSTANCE, this);
 
         this.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             final Commands commands = event.registrar();
             commands.register(MachineLearningCommand.register(), "Run the machine learning command");
         });
 
-        // /* try to use MKL when available */
-        // System.setProperty("org.bytedeco.openblas.load", "mkl");
-        //
-        // // Create a new Net.
-        // LibtorchTest.Net net = new LibtorchTest.Net();
+        World world = Bukkit.getWorlds().getFirst();
+
+        world.setTime(0);
+        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        world.setWeatherDuration(0);
+        world.setStorm(false);
+        world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
+        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+
+        // DedicatedServer server = ((CraftServer) Bukkit.getServer()).getServer();
+        // ServerTickRateManager serverTickRateManager = server.tickRateManager();
+        // if (serverTickRateManager.isSprinting()) {
+        //     serverTickRateManager.stopSprinting();
+        // }
+        // if (serverTickRateManager.isSteppingForward()) {
+        //     serverTickRateManager.stopStepping();
+        // }
+        // serverTickRateManager.setFrozen(true);
+
+        for (Entity entity : world.getEntities()) {
+            if (entity instanceof Player player) {
+                if (player.getGameMode() == GameMode.CREATIVE) {
+                    player.teleport(new Location(world, 1, 1, 1));
+                } else {
+                    player.kick();
+                }
+            } else {
+                entity.remove();
+            }
+        }
+
+        TrainingManager.setup();
+
+        Debugger.start();
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                TrainingManager.trainingStep();
+                Debugger.update();
+            }
+        }.runTaskTimer(this, 0, 1);
+
+        // Net net = new Net();
         //
         // // Create a multi-threaded data loader for the MNIST dataset.
         // MNISTMapDataset data_set = new MNIST("./data").map(new ExampleStack());
@@ -40,41 +99,62 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         // SGD optimizer = new SGD(net.parameters(), new SGDOptions(/*lr=*/0.01));
         //
         // for (int epoch = 1; epoch <= 10; ++epoch) {
-        //   int batch_index = 0;
-        //   // Iterate the data loader to yield batches from the dataset.
-        //   for (ExampleIterator it = data_loader.begin(); !it.equals(data_loader.end()); it = it.increment()) {
-        //     Example batch = it.access();
-        //     // Reset gradients.
-        //     optimizer.zero_grad();
-        //     // Execute the model on the input data.
-        //     Tensor prediction = net.forward(batch.data());
-        //     // Compute a loss value to judge the prediction of our model.
-        //     Tensor loss = nll_loss(prediction, batch.target());
-        //     // Compute gradients of the loss w.r.t. the parameters of our model.
-        //     loss.backward();
-        //     // Update the parameters based on the calculated gradients.
-        //     optimizer.step();
-        //     // Output the loss and checkpoint every 100 batches.
-        //     if (++batch_index % 100 == 0) {
-        //       String message = ("Epoch: " + epoch + " | Batch: " + batch_index
-        //           + " | Loss: " + loss.item_float());
-        //       Bukkit.getOnlinePlayers().forEach(player -> player.sendMessage(Component.text(message)));
-        //       // Serialize your model periodically as a checkpoint.
-        //       OutputArchive archive = new OutputArchive();
-        //       net.save(archive);
-        //       archive.save_to("net.pt");
+        //     int batch_index = 0;
+        //     // Iterate the data loader to yield batches from the dataset.
+        //     for (ExampleIterator it = data_loader.begin(); !it.equals(data_loader.end()); it = it.increment()) {
+        //         Example batch = it.access();
+        //         // Reset gradients.
+        //         optimizer.zero_grad();
+        //         // Execute the model on the input data.
+        //         Tensor prediction = net.forward(batch.data());
+        //         // Compute a loss value to judge the prediction of our model.
+        //         Tensor loss = nll_loss(prediction, batch.target());
+        //         // Compute gradients of the loss w.r.t. the parameters of our model.
+        //         loss.backward();
+        //         // Update the parameters based on the calculated gradients.
+        //         optimizer.step();
+        //         // Output the loss and checkpoint every 100 batches.
+        //         if (++batch_index % 100 == 0) {
+        //             System.out.println("Epoch: " + epoch + " | Batch: " + batch_index
+        //                 + " | Loss: " + loss.item_float());
+        //             // Serialize your model periodically as a checkpoint.
+        //             OutputArchive archive = new OutputArchive();
+        //             net.save(archive);
+        //             archive.save_to("net.pt");
+        //         }
         //     }
-        //   }
         // }
     }
 
     @Override
     public void onDisable() {
-        // Plugin shutdown logic
+        Debugger.stop();
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         event.getPlayer().sendMessage(Component.text("Hello, " + event.getPlayer().getName() + "!"));
     }
+
+    // static class Net extends Module {
+    //     // Use one of many "standard library" modules.
+    //     final LinearImpl fc1, fc2, fc3;
+    //
+    //     Net() {
+    //         // Construct and register two Linear submodules.
+    //         fc1 = register_module("fc1", new LinearImpl(784, 64));
+    //         fc2 = register_module("fc2", new LinearImpl(64, 32));
+    //         fc3 = register_module("fc3", new LinearImpl(32, 10));
+    //     }
+    //
+    //     // Implement the Net's algorithm.
+    //     Tensor forward(Tensor x) {
+    //         // Use one of many tensor manipulation functions.
+    //         x = relu(fc1.forward(x.reshape(x.size(0), 784)));
+    //         x = dropout(x, /*p=*/0.5, /*train=*/is_training());
+    //         x = relu(fc2.forward(x));
+    //         x = log_softmax(fc3.forward(x), /*dim=*/1);
+    //         return x;
+    //     }
+    // }
 }
