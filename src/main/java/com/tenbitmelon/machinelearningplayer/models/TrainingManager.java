@@ -1,5 +1,10 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
+import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.CounterControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import com.tenbitmelon.machinelearningplayer.environment.Action;
 import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
@@ -10,6 +15,8 @@ import org.bytedeco.pytorch.global.torch;
 
 import java.util.*;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+
 public class TrainingManager {
 
     static public boolean runTraining = false;
@@ -17,6 +24,7 @@ public class TrainingManager {
     static ExperimentConfig args;
     static SyncedVectorEnvironment environment;
     static MinecraftRL model;
+    static MinecraftRL.LSTMState initialLSTMState;
     static MinecraftRL.LSTMState nextLstmState;
     static VectorResetResult resetResult;
     static Tensor nextObs;
@@ -32,22 +40,34 @@ public class TrainingManager {
 
     static int globalStep = 0;
     static long startTime = System.currentTimeMillis();
-    static int iteration = 0;
+    static int iteration = 1;
+    static int step = 0;
+
+    static String logText = "";
+
+    private static boolean runningInnerLoop = false;
 
     public static void setup() {
-        args = new ExperimentConfig();
-        environment = new SyncedVectorEnvironment(args.numEnvs);
+        LOGGER.info("--- Setting up Training Manager ---");
+        args = ExperimentConfig.getInstance();
+        LOGGER.info("ExperimentConfig loaded. numEnvs={}, numSteps={}", args.numEnvs, args.numSteps);
+        environment = new SyncedVectorEnvironment(args);
+        LOGGER.info("SyncedVectorEnvironment initialized.");
         model = new MinecraftRL(environment);
+        LOGGER.info("MinecraftRL model initialized.");
 
         nextLstmState = new MinecraftRL.LSTMState(
             torch.zeros(model.getLSTMLayers(), args.numEnvs, model.lstmHiddenSize),
             torch.zeros(model.getLSTMLayers(), args.numEnvs, model.lstmHiddenSize));
+        LOGGER.info("Initial LSTM state created. Hidden shape: {}, Cell shape: {}", nextLstmState.hiddenState().shape(), nextLstmState.cellState().shape());
 
         adamOptions = new AdamOptions(args.learningRate);
         optimizer = new Adam(model.parameters(), adamOptions);
         adamOptions.eps().put(1e-5);
+        LOGGER.info("Adam optimizer initialized with learning rate: {}", args.learningRate);
 
         nextDone = torch.zeros(args.numEnvs);
+        LOGGER.info("Initial 'nextDone' tensor created. Shape: {}", nextDone.shape());
 
         observations = torch.zeros(args.numSteps, args.numEnvs, Observation.OBSERVATION_SPACE_SIZE);
         actions = torch.zeros(args.numSteps, args.numEnvs, Action.ACTION_SPACE_SIZE);
@@ -55,6 +75,21 @@ public class TrainingManager {
         rewards = torch.zeros(args.numSteps, args.numEnvs);
         dones = torch.zeros(args.numSteps, args.numEnvs);
         values = torch.zeros(args.numSteps, args.numEnvs);
+        LOGGER.info("Storage tensors initialized. Shape (e.g., observations): {}", observations.shape());
+
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text(""), () -> logText));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Env. Ready"), () -> environment.isReady()));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Inner Loop"), () -> runningInnerLoop));
+        Debugger.mainDebugWindow.addControl(new BooleanControl(Component.text("Run Training"), () -> runTraining, (value) -> runTraining = value));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Iteration"), () -> iteration));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Step"), () -> step));
+        Debugger.mainDebugWindow.addText("");
+        Debugger.mainDebugWindow.addText("Arguments:");
+        // args
+        Debugger.mainDebugWindow.addControl(new CounterControl(Component.text("Num Iterations"), () -> args.numIterations, (value) -> args.numIterations = value));
+        Debugger.mainDebugWindow.addControl(new CounterControl(Component.text("Num Steps"), () -> args.numSteps, (value) -> args.numSteps = value));
+
+        LOGGER.info("--- Training Manager setup complete ---");
     }
 
     // Placeholder for future implementation
@@ -62,33 +97,54 @@ public class TrainingManager {
         if (!runTraining) {
             return;
         }
+        LOGGER.info("--- Tick ---");
 
         if (!environment.isReady()) {
             Bukkit.broadcast(Component.text("Environment is not ready for training."));
-            System.out.println("Environment is not ready for training.");
+            LOGGER.warn("Attempted to run training step, but environment is not ready.");
             runTraining = false;
             return;
         }
 
         if (resetResult == null) {
+            LOGGER.info("Initial environment reset...");
             resetResult = environment.reset(args.seed);
             nextObs = resetResult.observationsTensor();
+            LOGGER.info("Environment reset complete. Initial observation shape: {}", nextObs.shape());
         }
 
+
+        Debugger.mainDebugWindow.refresh();
+
+
+        if (runningInnerLoop) {
+            runSteps();
+        } else {
+            epochSetup();
+            if (!runTraining) return;
+            runSteps();
+        }
+    }
+
+    public static void epochSetup() {
+        LOGGER.info("==================== Starting Epoch Setup for Iteration: {} ====================", iteration);
+        logText = "Epoch Setup...";
+        Debugger.mainDebugWindow.refresh();
+        // for iteration in range(1, args.num_iterations + 1):
+
+        // if (iteration >= 2) {
         if (iteration >= args.numIterations + 1) {
-            Bukkit.broadcast(Component.text("Iterations over."));
-            System.out.println("Iterations over.");
-            runTraining = true;
+            LOGGER.info("Maximum iterations reached. Stopping training.");
+            runTraining = false;
             return;
         }
 
-        iteration++;
-        System.out.println("Training iteration: " + iteration);
 
             /*
             initial_lstm_state = (next_lstm_state[0].clone(), next_lstm_state[1].clone())
              */
-        MinecraftRL.LSTMState initialLSTMState = nextLstmState.clone();
+        initialLSTMState = nextLstmState.clone();
+        LOGGER.info("Cloned LSTM state for the new epoch.");
 
             /*
             if args.anneal_lr:
@@ -100,17 +156,37 @@ public class TrainingManager {
             double frac = 1.0 - (iteration - 1.0) / args.numIterations;
             double lrNow = frac * args.learningRate;
             optimizer.param_groups().get(0).options().set_lr(lrNow);
+            LOGGER.info("Annealed learning rate for iteration {}: {}", iteration, lrNow);
         }
 
-        for (int step = 0; step < args.numSteps; step++) {
+    }
+
+    public static void runSteps() {
+        LOGGER.info("[===] Running steps for iteration {}, step {}", iteration, step);
+        logText = "Run Steps...";
+        Debugger.mainDebugWindow.refresh();
+
+        // for step in range(0, args.num_steps):
+        runningInnerLoop = true;
+
+        if (step >= args.numSteps) {
+            LOGGER.info("Completed all {} steps for iteration {}. Finishing epoch.", args.numSteps, iteration);
+            step = 0;
+            runningInnerLoop = false;
+            finishEpoch();
+            return;
+        }
+
                 /*
                 global_step += args.num_envs
                 obs[step] = next_obs
                 dones[step] = next_done
                  */
-            globalStep += args.numEnvs;
-            observations.get(step).put(nextObs);
-            dones.get(step).put(nextDone);
+
+        globalStep += args.numEnvs;
+        observations.get(step).put(nextObs);
+        dones.get(step).put(nextDone);
+        LOGGER.info("[Step {}] Stored next_obs (shape: {}) and next_done (shape: {})", step, nextObs.shape(), nextDone.shape());
 
                 /*
                 with torch.no_grad():
@@ -121,10 +197,15 @@ public class TrainingManager {
                 actions[step] = action
                 logprobs[step] = logprob
                  */
-            MinecraftRL.ActionAndValue actionResult = model.getActionAndValue(nextObs, nextLstmState, nextDone);
-            values.get(step).put(actionResult.value().flatten());
-            actions.get(step).put(actionResult.action());
-            logprobs.get(step).put(actionResult.totalLogProbs());
+        logText = "Getting action and value for step " + step;
+        Debugger.mainDebugWindow.refresh();
+        LOGGER.info("[Step {}] Calling model.getActionAndValue...", step);
+        MinecraftRL.ActionAndValue actionResult = model.getActionAndValue(nextObs, nextLstmState, nextDone);
+        values.get(step).put(actionResult.value().flatten());
+        actions.get(step).put(actionResult.action());
+        logprobs.get(step).put(actionResult.totalLogProbs());
+        LOGGER.info("[Step {}] Stored values (shape: {}), actions (shape: {}), logprobs (shape: {})",
+            step, values.get(step).shape(), actions.get(step).shape(), logprobs.get(step).shape());
 
                 /*
                 next_obs, reward, terminations, truncations, infos = envs.step(action_dict)
@@ -134,10 +215,16 @@ public class TrainingManager {
                     next_done
                 ).to(device)
                  */
-            VectorStepResult stepResult = environment.step(actionResult.action());
-            nextDone = Tensor.create(stepResult.logicalOrTerminationsAndTruncations());
-            rewards.get(step).put(Tensor.create(stepResult.rewards()));
-            nextObs = stepResult.observationsTensor();
+
+        logText = "Stepping environment for step " + step;
+        Debugger.mainDebugWindow.refresh();
+        LOGGER.info("[Step {}] Stepping environment with action (shape: {})", step, actionResult.action().shape());
+        VectorStepResult stepResult = environment.step(actionResult.action());
+        nextDone = Tensor.create(stepResult.logicalOrTerminationsAndTruncations());
+        rewards.get(step).put(Tensor.create(stepResult.rewards()));
+        nextObs = stepResult.observationsTensor();
+        LOGGER.info("[Step {}] Environment step complete. New obs shape: {}, new rewards shape: {}, new done shape: {}",
+            step, nextObs.shape(), rewards.get(step).shape(), nextDone.shape());
 
                 /*
                 if "final_info" in infos:
@@ -154,8 +241,25 @@ public class TrainingManager {
                             )
                 */
 
-            //     TODO: Handle logging of episodic returns and lengths
-        }
+        //     TODO: Handle logging of episodic returns and lengths
+
+        // Sleep for a short duration to allow the environment to process the step
+        // try {
+        //     Thread.sleep(5000);
+        // } catch (InterruptedException e) {
+        //     throw new RuntimeException(e);
+        // }
+
+        step++;
+    }
+
+    public static void finishEpoch() {
+        LOGGER.info("==================== Finishing Epoch for Iteration: {} ====================", iteration);
+        logText = "Finish Epoch...";
+        Debugger.mainDebugWindow.refresh();
+
+        iteration++;
+
 
             /*
             next_value = agent.get_value(
@@ -181,9 +285,12 @@ public class TrainingManager {
             returns = advantages + values
              */
         Tensor returns;
+        LOGGER.info("Calculating value for the last observation to bootstrap rewards...");
         Tensor value = model.getValue(nextObs, nextLstmState, nextDone);
         value = value.reshape(1, -1);
+        LOGGER.info("Bootstrap value shape: {}", value.shape());
 
+        LOGGER.info("Calculating GAE advantages and returns...");
         Tensor advantages = torch.zeros_like(rewards);
         Tensor lastGAELam = torch.zeros_like(rewards.get(0));
         for (int t = args.numSteps - 1; t >= 0; t--) {
@@ -209,6 +316,7 @@ public class TrainingManager {
             lastGAELam = advantage;
         }
         returns = advantages.add(values);
+        LOGGER.info("GAE calculation complete. Advantages shape: {}, Returns shape: {}", advantages.shape(), returns.shape());
 
             /*
             # flatten the batch
@@ -221,6 +329,7 @@ public class TrainingManager {
             b_values = values.reshape(-1)
              */
 
+        LOGGER.info("Flattening batch data for updates...");
         Tensor bObs = observations.reshape(-1, Observation.OBSERVATION_SPACE_SIZE);
         Tensor bLogProbs = logprobs.reshape(-1);
         Tensor bActions = actions.reshape(-1, Action.ACTION_SPACE_SIZE);
@@ -228,6 +337,7 @@ public class TrainingManager {
         Tensor bAdvantages = advantages.reshape(-1);
         Tensor bReturns = returns.reshape(-1);
         Tensor bValues = values.reshape(-1);
+        LOGGER.info("Flattened batch shapes: b_obs: {}, b_actions: {}, b_logprobs: {}", bObs.shape(), bActions.shape(), bLogProbs.shape());
 
 
             /*
@@ -248,9 +358,10 @@ public class TrainingManager {
                 flatinds[i][j] = idx++;
             }
         }
+        LOGGER.info("Minibatch setup: {} minibatches, {} envs per batch.", args.numMinibatches, envsPerBatch);
 
 
-
+        LOGGER.info("--- Starting PPO Update Loop ({} epochs) ---", args.updateEpochs);
             /*
             clipfracs = []
             for epoch in range(args.update_epochs):
@@ -265,6 +376,7 @@ public class TrainingManager {
         Tensor approxKl = null;
         Tensor oldApproxKl = null;
         for (int epoch = 0; epoch < args.updateEpochs; epoch++) {
+            LOGGER.info("Update epoch {}/{}", epoch + 1, args.updateEpochs);
             // Shuffle environment indices
             Random rnd = new Random();
             for (int i = envinds.length - 1; i > 0; i--) {
@@ -284,6 +396,7 @@ public class TrainingManager {
 
                     */
                 int end = start + envsPerBatch;
+                LOGGER.info("  Minibatch: envs from {} to {}", start, end - 1);
                 int[] mbenvinds = Arrays.copyOfRange(envinds, start, end);
                 int[] mb_inds = new int[args.numSteps * mbenvinds.length];
                 for (int i = 0; i < args.numSteps; i++) {
@@ -326,13 +439,16 @@ public class TrainingManager {
                     bActionsMB.get(i).put(bActions.get(mb_inds[i]));
                 }
 
-                // _, _, newlogprob, entropy, newvalue, _ = agent.get_action_and_valu
+                // _, _, newlogprob, entropy, newvalue, _ = agent.get_action_and_value
+                LOGGER.info("  Minibatch shapes: obs={}, actions={}, dones={}, lstm_hidden={}",
+                    bObsMB.shape(), bActionsMB.shape(), bDonesMB.shape(), lstmStateHidden.shape());
                 MinecraftRL.ActionAndValue actionAndValueResult = model.getActionAndValue(
                     bObsMB,
                     new MinecraftRL.LSTMState(lstmStateHidden, lstmStateCell),
                     bDonesMB,
                     bActionsMB
                 );
+                LOGGER.info("  Forward pass for minibatch complete.");
 
 
                     /*
@@ -347,6 +463,7 @@ public class TrainingManager {
                 }
                 Tensor logratio = actionAndValueResult.totalLogProbs().sub(bLogProbsMB);
                 Tensor ratio = logratio.exp();
+                LOGGER.info("  Calculated logratio shape: {}, ratio shape: {}", logratio.shape(), ratio.shape());
 
                     /*
 
@@ -384,6 +501,7 @@ public class TrainingManager {
                     Tensor mean = mbAdvantages.mean();
                     Tensor std = mbAdvantages.std();
                     mbAdvantages = mbAdvantages.sub(mean).div(std.add(new Scalar(1e-8)));
+                    LOGGER.info("  Normalized minibatch advantages.");
                 }
 
                     /*
@@ -463,8 +581,10 @@ public class TrainingManager {
                 Tensor loss = pgLoss.sub(
                     entropyLoss.mul(new Scalar(args.entCoef))
                 ).add(
-                    vLoss.mul(new Scalar(args.entCoef))
+                    vLoss.mul(new Scalar(args.vfCoef))
                 );
+                LOGGER.info("  Calculated losses: Total={}, PG={}, VLoss={}, Entropy={}",
+                    loss.item().toFloat(), pgLoss.item().toFloat(), vLoss.item().toFloat(), entropyLoss.item().toFloat());
 
                     /*
 
@@ -479,6 +599,7 @@ public class TrainingManager {
                 // Clip gradients
                 torch.clip_grad_norm_(model.parameters(), args.maxGradNorm);
                 optimizer.step();
+                LOGGER.info("  Optimizer step completed (zero_grad, backward, clip_grad_norm, step).");
             }
                     /*
 
@@ -486,10 +607,11 @@ public class TrainingManager {
                     break
              */
             if (args.targetKl != null && approxKl != null && approxKl.item().toFloat() > args.targetKl) {
-                System.out.println("Target KL exceeded, breaking out of training loop.");
+                LOGGER.warn("Target KL ({}) exceeded ({}). Breaking from update epochs.", args.targetKl, approxKl.item().toFloat());
                 break;
             }
         }
+        LOGGER.info("--- PPO Update Loop Finished ---");
 
             /*
             y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
@@ -518,15 +640,17 @@ public class TrainingManager {
             )
              */
 
-        System.out.println("Learning Rate: " + optimizer.param_groups().get(0).options().get_lr());
-        System.out.println("Value Loss: " + vLoss.item());
-        System.out.println("Policy Loss: " + pgLoss.item());
-        System.out.println("Entropy: " + entropyLoss.item());
-        System.out.println("Old Approx KL: " + oldApproxKl.item());
-        System.out.println("Approx KL: " + approxKl.item());
-        System.out.println("Clip Fraction: " + clipFracs.stream().mapToDouble(Float::doubleValue).average().orElse(0.0));
-        System.out.println("Explained Variance: " + explainedVar);
-        System.out.println("Steps Per Second: " + (int) (globalStep / ((System.currentTimeMillis() - startTime) / 1000.0)));
-        System.out.println("Global Step: " + globalStep);
+        LOGGER.info("--- Epoch {} Summary ---", iteration);
+        LOGGER.info("Learning Rate: {}", optimizer.param_groups().get(0).options().get_lr());
+        if (vLoss != null) LOGGER.info("Value Loss: {}", vLoss.item().toFloat());
+        if (pgLoss != null) LOGGER.info("Policy Loss: {}", pgLoss.item().toFloat());
+        if (entropyLoss != null) LOGGER.info("Entropy: {}", entropyLoss.item().toFloat());
+        if (oldApproxKl != null) LOGGER.info("Old Approx KL: {}", oldApproxKl.item().toFloat());
+        if (approxKl != null) LOGGER.info("Approx KL: {}", approxKl.item().toFloat());
+        LOGGER.info("Clip Fraction: {}", clipFracs.stream().mapToDouble(Float::doubleValue).average().orElse(0.0));
+        LOGGER.info("Explained Variance: {}", explainedVar);
+        LOGGER.info("Steps Per Second (SPS): {}", (int) (globalStep / ((System.currentTimeMillis() - startTime) / 1000.0)));
+        LOGGER.info("Global Step Count: {}", globalStep);
+        LOGGER.info("=========================================================================");
     }
 }

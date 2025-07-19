@@ -11,6 +11,9 @@ import org.bytedeco.pytorch.Module;
 
 import javax.annotation.Nullable;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
+
 public class MinecraftRL extends Module {
 
     private final SequentialImpl voxelCNN;
@@ -176,6 +179,12 @@ public class MinecraftRL extends Module {
                 torch.constant_(param, new Scalar(0.0f));
             } else if (name.contains("weight")) {
                 // torch.orthogonal_(param, Math.sqrt(2.0));
+
+                // Xavier/Glorot normal initialization ???
+                double fanIn = lstm.options().input_size().get();
+                double fanOut = lstm.options().hidden_size().get();
+                double xavierStd = Math.sqrt(2.0 / (fanIn + fanOut));
+                torch.normal_(param, 0.0, xavierStd);
             }
         }
 
@@ -237,11 +246,20 @@ public class MinecraftRL extends Module {
         this.actorJumpKey = actorJumpKey;
         this.actorMoveKeys = actorMoveKeys;
         this.critic = critic;
+
+        LOGGER.info("MinecraftRL model initialized successfully.");
     }
 
     static LinearImpl createLinearLayer(long inputsDim, long outputDims, double std) {
         LinearImpl layer = new LinearImpl(inputsDim, outputDims);
         // torch.orthogonal_(layer.weight(), std);
+
+        // Xavier/Glorot normal initialization ???
+        double fan_in = inputsDim;
+        double fan_out = outputDims;
+        double xavier_std = Math.sqrt(2.0 / (fan_in + fan_out)) * std;
+        torch.normal_(layer.weight(), 0.0, xavier_std);
+
         torch.constant_(layer.bias(), new Scalar(0.0f));
         return layer;
     }
@@ -263,19 +281,37 @@ public class MinecraftRL extends Module {
 
         Conv3dImpl layer = new Conv3dImpl(conv3dOptions);
 
+
         // double root2 = Math.sqrt(2.0);
         // torch.orthogonal_(layer.weight(), root2);
+
+        // Xavier/Glorot normal initialization ???
+        double fan_in = inChannels * kernelSize1 * kernelSize2 * kernelSize3;
+        double fan_out = outChannels * kernelSize1 * kernelSize2 * kernelSize3;
+        double xavier_std = Math.sqrt(2.0 / (fan_in + fan_out));
+        torch.normal_(layer.weight(), 0.0, xavier_std);
+
         torch.constant_(layer.bias(), new Scalar(0.0f));
         return layer;
     }
 
     public States getStates(Tensor observation, LSTMState lstmState, Tensor done) {
+        LOGGER.info("--- Entering getStates ---");
+        LOGGER.info("Initial observation shape: {}", observation.shape());
+        LOGGER.info("Initial LSTM hidden state shape: {}", lstmState.hiddenState().shape());
+        LOGGER.info("Initial LSTM cell state shape: {}", lstmState.cellState().shape());
+        LOGGER.info("Initial done shape: {}", done.shape());
+
         /*
         voxel_data = x[:, : MinecraftDummyEnv.GRID_VOLUME]
         other_inputs = x[:, MinecraftDummyEnv.GRID_VOLUME :]
         */
         Tensor voxelData = observation.narrow(1, 0, MinecraftEnvironment.GRID_VOLUME);
         Tensor otherInputs = observation.narrow(1, MinecraftEnvironment.GRID_VOLUME, Observation.OBSERVATION_SPACE_SIZE - MinecraftEnvironment.GRID_VOLUME);
+
+
+        LOGGER.info("Split voxel data shape: {}", voxelData.shape());
+        LOGGER.info("Split other inputs shape: {}", otherInputs.shape());
 
         /*
         # Reshape voxel data from (75) to (5, 5, 3)
@@ -302,12 +338,18 @@ public class MinecraftRL extends Module {
             MinecraftEnvironment.GRID_SIZE_Y
         ).unsqueeze(1); // (B, 1, X, Z, Y)
 
-        Tensor voxelFeatures = this.voxelCNN.forward(voxelData.div(new Scalar(2.0f)));
+        LOGGER.info("Reshaped voxel data shape (for CNN): {}", voxelData.shape());
 
+        Tensor voxelFeatures = this.voxelCNN.forward(voxelData.div(new Scalar(2.0f)));
         Tensor otherFeatures = this.otherInputsProcessor.forward(otherInputs);
         TensorVector tensorsToCombine = new TensorVector(voxelFeatures, otherFeatures);
         Tensor combinedFeatures = torch.cat(tensorsToCombine, 1);
         Tensor sharedFeatures = this.sharedNetwork.forward(combinedFeatures);
+
+        LOGGER.info("Voxel features shape (after CNN): {}", voxelFeatures.shape());
+        LOGGER.info("Other features shape (after processing): {}", otherFeatures.shape());
+        LOGGER.info("Combined features shape (after cat): {}", combinedFeatures.shape());
+        LOGGER.info("Shared features shape (after shared network): {}", sharedFeatures.shape());
 
         /*
         # # LSTM logic
@@ -327,27 +369,38 @@ public class MinecraftRL extends Module {
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
          */
 
+        // LOGGER.info("Shared features shape: {}", sharedFeatures.shape());
+
         long batchSize = lstmState.hiddenState.size(1);
         Tensor hidden = sharedFeatures.reshape(-1, batchSize, this.lstm.options().input_size().get());
         done = done.reshape(-1, batchSize);
+
+        LOGGER.info("Reshaped hidden for LSTM input shape: {}", hidden.shape());
+        LOGGER.info("Reshaped done for LSTM loop shape: {}", done.shape());
+
         TensorVector newHidden = new TensorVector();
         for (int i = 0; i < hidden.size(0); i++) {
             Tensor h = hidden.get(i);
             Tensor d = done.get(i);
+            // LOGGER.info("LSTM loop [{}]: h shape {}, d shape {}", i, h.shape(), d.shape());
 
             // Hidden state
             Tensor oneMinusD = Tensor.create(1.0).sub(d).view(1, -1, 1);
             Tensor hState = oneMinusD.mul(lstmState.hiddenState).toType(torch.ScalarType.Float);
             // Cell state
             Tensor cState = oneMinusD.mul(lstmState.cellState).toType(torch.ScalarType.Float);
+            // LOGGER.info("LSTM loop [{}]: reset hState shape {}, cState shape {}", i, hState.shape(), cState.shape());
 
             T_TensorTensor_T tTensorTensorT = new T_TensorTensor_T(hState, cState);
 
             T_TensorT_TensorTensor_T_T hNew_LSTMState = this.lstm.forward(h.unsqueeze(0), tTensorTensorT);
             newHidden.push_back(hNew_LSTMState.get0());
             lstmState = new LSTMState(hNew_LSTMState.get1().get0(), hNew_LSTMState.get1().get1());
+            // LOGGER.info("LSTM loop [{}]: new hidden from LSTM shape {}", i, hNew_LSTMState.get0().shape());
         }
         Tensor newHiddenTensor = torch.flatten(torch.cat(newHidden), 0, 1);
+        LOGGER.info("Final newHiddenTensor shape (after flatten): {}", newHiddenTensor.shape());
+        LOGGER.info("--- Exiting getStates ---");
 
         /*
         return new_hidden, lstm_state
@@ -361,9 +414,13 @@ public class MinecraftRL extends Module {
         hidden, _ = self.get_states(x, lstm_state, done)
         return self.critic(hidden)
          */
+        LOGGER.info("--- Entering getValue ---");
         States states = this.getStates(observation, lstmState, done);
         Tensor hidden = states.newHiddenTensor;
+        LOGGER.info("Hidden tensor shape for critic: {}", hidden.shape());
         Tensor value = this.critic.forward(hidden);
+        LOGGER.info("Output value shape from critic: {}", value.shape());
+        LOGGER.info("--- Exiting getValue ---");
         return value;
     }
 
@@ -372,8 +429,12 @@ public class MinecraftRL extends Module {
     }
 
     public ActionAndValue getActionAndValue(Tensor observation, LSTMState lstmState, Tensor done, @Nullable Tensor action) {
+        LOGGER.info("--- Entering getActionAndValue ---");
+
         States states = this.getStates(observation, lstmState, done);
         Tensor sharedFeatures = states.newHiddenTensor;
+
+        LOGGER.info("Shared features shape for actor/critic heads: {}", sharedFeatures.shape());
 
         /*
         # --- Actor Heads ---
@@ -406,18 +467,28 @@ public class MinecraftRL extends Module {
         Tensor lookMeans = torch.tanh(this.actorLookChangeMean.forward(sharedFeatures));
         Tensor lookStd = torch.exp(this.actorLookChangeLogSTD.expand(lookMeans.shape()));
         Normal lookDist = new Normal(lookMeans, lookStd);
+        LOGGER.info("Look means shape: {}, Look std shape: {}", lookMeans.shape(), lookStd.shape());
 
         Tensor sprintLogits = this.actorSprintKey.forward(sharedFeatures);
         Bernoulli sprintDist = new Bernoulli(sprintLogits);
+        LOGGER.info("Sprint logits shape: {}", sprintLogits.shape());
 
         Tensor sneakLogits = this.actorSneakKey.forward(sharedFeatures);
         Bernoulli sneakDist = new Bernoulli(sneakLogits);
+        LOGGER.info("Sneak logits shape: {}", sneakLogits.shape());
 
         Tensor jumpLogits = this.actorJumpKey.forward(sharedFeatures);
         Bernoulli jumpDist = new Bernoulli(jumpLogits);
+        LOGGER.info("Jump logits shape: {}", jumpLogits.shape());
 
         Tensor moveLogits = this.actorMoveKeys.forward(sharedFeatures); // Shape: (B, 4)
         Bernoulli moveDist = new Bernoulli(moveLogits); // Will sample (B,4) of 0s and 1s
+        LOGGER.info("Move logits shape: {}", moveLogits.shape());
+
+        LOGGER.info("Sprint logits values: {}", tensorString(sprintLogits));
+        LOGGER.info("Sneak logits values: {}", tensorString(sneakLogits));
+        LOGGER.info("Jump logits values: {}", tensorString(jumpLogits));
+        LOGGER.info("Move logits values: {}", tensorString(moveLogits));
 
         /*
         if action is None:
@@ -443,15 +514,24 @@ public class MinecraftRL extends Module {
          */
 
         if (action == null) {
+            LOGGER.info("Action is null, sampling new actions.");
             Tensor lookSample = lookDist.sample();
             Tensor sprintSample = sprintDist.sample();
             Tensor sneakSample = sneakDist.sample();
             Tensor jumpSample = jumpDist.sample();
             Tensor moveSample = moveDist.sample();
+            LOGGER.info("Sampled actions shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
+                lookSample.shape(), sprintSample.shape(), sneakSample.shape(), jumpSample.shape(), moveSample.shape());
+
+            LOGGER.info("Sprint sample: {}", tensorString(sprintSample));
+            LOGGER.info("Sneak sample: {}", tensorString(sneakSample));
+            LOGGER.info("Jump sample: {}", tensorString(jumpSample));
+            LOGGER.info("Move sample: {}", tensorString(moveSample));
 
             // Concatenate along the last dimension -> flat per-sample vector
             // Resulting shape: (B, 2+1+1+1+4) = (B, 9)
             action = torch.cat(new TensorVector(lookSample, sprintSample, sneakSample, jumpSample, moveSample), -1);
+            LOGGER.info("Concatenated action shape: {}", action.shape());
         }
 
         /*
@@ -486,9 +566,12 @@ public class MinecraftRL extends Module {
         Tensor logProbsJump = jumpDist.logProb(jumpAction).squeeze(-1);
         Tensor moveAction = action.narrow(-1, 5, 4);
         Tensor logProbsMove = moveDist.logProb(moveAction).sum(-1);
+        LOGGER.info("Log probs shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
+            logProbsLook.shape(), logProbsSprint.shape(), logProbsSneak.shape(), logProbsJump.shape(), logProbsMove.shape());
 
         Tensor totalLogProbs = logProbsLook.add(logProbsSprint).add(logProbsSneak)
             .add(logProbsJump).add(logProbsMove);
+        LOGGER.info("Total log probs shape: {}", totalLogProbs.shape());
 
         /*
         entropy_look = look_dist.entropy().sum(dim=-1)
@@ -507,9 +590,12 @@ public class MinecraftRL extends Module {
         Tensor entropySneak = sneakDist.entropy().squeeze(-1);
         Tensor entropyJump = jumpDist.entropy().squeeze(-1);
         Tensor entropyMove = moveDist.entropy().sum(-1);
+        LOGGER.info("Entropy shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
+            entropyLook.shape(), entropySprint.shape(), entropySneak.shape(), entropyJump.shape(), entropyMove.shape());
 
         Tensor totalEntropy = entropyLook.add(entropySprint).add(entropySneak)
             .add(entropyJump).add(entropyMove);
+        LOGGER.info("Total entropy shape: {}", totalEntropy.shape());
 
         /*
         # --- Critic Value ---
@@ -517,6 +603,7 @@ public class MinecraftRL extends Module {
          */
 
         Tensor value = this.critic.forward(sharedFeatures);
+        LOGGER.info("Critic value shape: {}", value.shape());
 
         /*
         # if action is None, sample new actions
@@ -530,6 +617,7 @@ public class MinecraftRL extends Module {
         )
          */
 
+        LOGGER.info("--- Exiting getActionAndValue ---");
         return new ActionAndValue(
             action,
             totalLogProbs,

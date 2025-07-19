@@ -52,12 +52,17 @@ public class ControlsWindow extends UIElement {
         dirty = true;
     }
 
-    public void update() {
-        super.update();
+    public void addText(String text, String value) {
+        controls.add(new TextControl(Component.text(text), Component.text(value)));
+        dirty = true;
+    }
 
-        if (!dirty) return;
-        dirty = false;
+    public void removeControl(Control control) {
+        controls.remove(control);
+        dirty = true;
+    }
 
+    public void refresh() {
         int longestLine = 0;
         int longestValue = 0;
         for (Control control : controls) {
@@ -77,6 +82,15 @@ public class ControlsWindow extends UIElement {
 
         display.text(builder.build());
         displayBack.text(builder.build());
+    }
+
+    public void update() {
+        super.update();
+
+        if (!dirty) return;
+        dirty = false;
+
+        refresh();
     }
 
     @Override
@@ -124,6 +138,5 @@ public class ControlsWindow extends UIElement {
 
         dirty = true;
     }
-
 
 }

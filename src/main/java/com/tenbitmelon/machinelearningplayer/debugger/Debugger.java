@@ -25,19 +25,14 @@ public class Debugger {
     public static final HashMap<UUID, UIElement> AWAITING_ANCHOR = new HashMap<>();
     public static World WORLD = Bukkit.getWorlds().getFirst();
     public static HashMap<UUID, UIElement> DRAGGED_ELEMENTS = new HashMap<>();
+    public static ControlsWindow mainDebugWindow;
     static ArrayList<UIElement> elements = new ArrayList<>();
 
     static {
-        ControlsWindow mainDebugWindow = new ControlsWindow();
+        mainDebugWindow = new ControlsWindow();
         mainDebugWindow.addText("ML Player Debugger");
         mainDebugWindow.addText("Author: TenBitMelon");
         mainDebugWindow.addText(" ");
-        mainDebugWindow.addControl(new BooleanControl(Component.text("Run Training"), () -> TrainingManager.runTraining, (value) -> TrainingManager.runTraining = value));
-        mainDebugWindow.addControl(new ButtonControl(Component.text("Single Step"), () -> {
-            TrainingManager.runTraining = true;
-            TrainingManager.trainingStep();
-            TrainingManager.runTraining = false;
-        }));
         mainDebugWindow.setPosition(new Vector3d(16, 3, 16));
         addElement(mainDebugWindow);
     }

@@ -79,12 +79,22 @@ public class Action {
     public MovementKeys moveKeys() {
         // return data.narrow(1, OFFSET_MOVE_KEYS, SIZE_MOVE_KEYS);
         return new MovementKeys(
-            data.get(OFFSET_MOVE_KEYS).item_bool(),
-            data.get(OFFSET_MOVE_KEYS + 1).item_bool(),
-            data.get(OFFSET_MOVE_KEYS + 2).item_bool(),
-            data.get(OFFSET_MOVE_KEYS + 3).item_bool()
+            data.get(OFFSET_MOVE_KEYS).item_int(),
+            data.get(OFFSET_MOVE_KEYS + 1).item_int(),
+            data.get(OFFSET_MOVE_KEYS + 2).item_int(),
+            data.get(OFFSET_MOVE_KEYS + 3).item_int()
         );
     }
 
-    public record MovementKeys(boolean forward, boolean backward, boolean left, boolean right) {}
+    public record MovementKeys(int forward, int backward, int left, int right) {
+        @Override
+        public String toString() {
+            return "MovementKeys{" +
+                "forward=" + forward +
+                ", backward=" + backward +
+                ", left=" + left +
+                ", right=" + right +
+                '}';
+        }
+    }
 }

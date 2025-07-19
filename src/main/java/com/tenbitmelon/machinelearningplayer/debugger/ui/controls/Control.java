@@ -33,7 +33,7 @@ public abstract class Control {
     }
 
     public @NotNull Component renderLabel() {
-        return label;
+        return label.append(Component.text("  "));
     }
 
     public int getLabelWidth() {
@@ -61,7 +61,7 @@ public abstract class Control {
         if (gapWidth >= 12) {
             //     Combination of 4 & 5 pixel spacers
             numSpaces = gapWidth / 4;
-            remainingPixels = gapWidth % 5;
+            remainingPixels = gapWidth % 4;
         } else if (gapWidth >= 2) {
             //     Combination of 2 & 3 pixel spacers
             fillerChar = '.';

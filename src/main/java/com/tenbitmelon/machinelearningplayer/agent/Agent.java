@@ -2,10 +2,9 @@ package com.tenbitmelon.machinelearningplayer.agent;
 
 import com.mojang.authlib.GameProfile;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.CounterControl;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.*;
+import com.tenbitmelon.machinelearningplayer.environment.Info;
+import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.DisconnectionDetails;
@@ -37,28 +36,38 @@ import org.bukkit.Location;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.jetbrains.annotations.NotNull;
+import org.joml.Vector3d;
 
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 @SuppressWarnings("UnstableApiUsage")
 public class Agent extends ServerPlayer {
 
     public final EntityPlayerActionPack actionPack = new EntityPlayerActionPack(this);
-    int counter = 0;
-    boolean toggle = false;
+    private final ArrayList<Control> observationSectionControls = new ArrayList<>();
     ControlsWindow debugWindow = new ControlsWindow();
+    TextControl infoDisplayControl = new TextControl("Latest Info: ");
     private boolean ready = false;
 
     public Agent(MinecraftServer server, ServerLevel level, GameProfile gameProfile, ClientInformation clientInformation) {
         super(server, level, gameProfile, clientInformation);
 
-        debugWindow.addControl(new CounterControl(Component.text("Counter"), () -> this.counter, (value) -> this.counter = value));
-        debugWindow.addControl(new BooleanControl(Component.text("Toggle"), () -> this.toggle, (value) -> this.toggle = value));
         debugWindow.addText("Agent: " + this.getName().getString());
-        debugWindow.addControl(new VariableControl(Component.text("Health"), () -> this.getHealth() + "/" + this.getMaxHealth()));
-        // debugWindow.addControl(new ButtonControl(Component.text("Toggle HUD"), this::toggleHUD));
+        debugWindow.addControl(new VariableControl(Component.text("Ready"), () -> ready));
+        debugWindow.addControl(new VariableControl(Component.text("Sneaking"), () -> actionPack.sneaking ? "Yes" : "No"));
+        debugWindow.addControl(new VariableControl(Component.text("Sprinting"), () -> actionPack.sprinting ? "Yes" : "No"));
+        debugWindow.addControl(new VariableControl(Component.text("Forward"), () -> actionPack.forward));
+        debugWindow.addControl(new VariableControl(Component.text("Strafing"), () -> actionPack.strafing));
+        debugWindow.addControl(new VariableControl(Component.text("Jumping"), () -> actionPack.hasAction(EntityPlayerActionPack.ActionType.JUMP) ? "Yes" : "No"));
+        debugWindow.addControl(new VariableControl(Component.text("P Jump"), () -> this.jumping ? "Yes" : "No"));
+        debugWindow.addControl(new TextControl(""));
+        debugWindow.addControl(new TextControl("Info Display:"));
+        debugWindow.addControl(infoDisplayControl);
     }
 
     public static CompletableFuture<Agent> spawn(MinecraftServer server, Location location) {
@@ -105,7 +114,8 @@ public class Agent extends ServerPlayer {
             server.getPlayerList().broadcastAll(new ClientboundRotateHeadPacket(instance, (byte) (instance.yHeadRot * 256 / 360)));
             server.getPlayerList().broadcastAll(ClientboundEntityPositionSyncPacket.of(instance));
             instance.entityData.set(DATA_PLAYER_MODE_CUSTOMISATION, (byte) 0x7f); // show all model layers (incl. capes)
-            instance.debugWindow.setAnchor(Bukkit.getEntity(instance.getUUID()));
+            // instance.debugWindow.setAnchor(Bukkit.getEntity(instance.getUUID()));
+            instance.debugWindow.setPosition(new Vector3d(instance.getX(), instance.getY() + 3, instance.getZ()));
 
             instance.ready = true;
 
@@ -113,6 +123,30 @@ public class Agent extends ServerPlayer {
         }, server);
 
         return agentFuture;
+    }
+
+    public void displayObservation(Observation observation) {
+        observationSectionControls.forEach(debugWindow::removeControl);
+        observationSectionControls.clear();
+
+        observationSectionControls.add(new TextControl(""));
+        observationSectionControls.add(new TextControl("Latest Observation:"));
+        observationSectionControls.add(new TextControl("Position in Block", tensorString(observation.positionInBlock())));
+        observationSectionControls.add(new TextControl("Velocity", tensorString(observation.velocity())));
+        observationSectionControls.add(new TextControl("Look Direction", tensorString(observation.lookDirection())));
+        observationSectionControls.add(new TextControl("Jumping", tensorString(observation.jumping())));
+        observationSectionControls.add(new TextControl("Sprinting", tensorString(observation.sprinting())));
+        observationSectionControls.add(new TextControl("Sneaking", tensorString(observation.sneaking())));
+        observationSectionControls.add(new TextControl("On Ground", tensorString(observation.onGround())));
+        observationSectionControls.add(new TextControl("Goal Direction", tensorString(observation.goalDirection())));
+
+        for (Control control : observationSectionControls) {
+            debugWindow.addControl(control);
+        }
+    }
+
+    public void displayInfo(Info info) {
+        infoDisplayControl.setValue(String.valueOf(info.distanceToGoal()));
     }
 
     public boolean isReady() {
@@ -148,9 +182,7 @@ public class Agent extends ServerPlayer {
             // the game not gonna crash violently.
         }
 
-        // debugWindow.setLine(0, Component.text("Agent: " + this.getName().getString()));
-        // debugWindow.setLine(1, Component.text("Health: " + this.getHealth() + "/" + this.getMaxHealth()));
-        // debugWindow.setLine(2, Component.text("Food: " + this.foodData.getFoodLevel() + "|" + this.foodData.getSaturationLevel()));
+        debugWindow.refresh();
     }
 
     private void shakeOff() {

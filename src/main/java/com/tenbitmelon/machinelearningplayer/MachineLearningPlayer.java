@@ -7,6 +7,7 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.logger.slf4j.ComponentLogger;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.ServerTickRateManager;
 import net.minecraft.server.dedicated.DedicatedPlayerList;
@@ -22,8 +23,12 @@ import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitScheduler;
+import org.bytedeco.javacpp.Loader;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.Module;
+import org.bytedeco.pytorch.presets.torch;
+
+import java.io.IOException;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningCommand.createRooms;
 import static org.bytedeco.pytorch.global.torch.*;
@@ -31,9 +36,29 @@ import static org.bytedeco.pytorch.global.torch.*;
 @SuppressWarnings("UnstableApiUsage")
 public final class MachineLearningPlayer extends JavaPlugin implements Listener {
 
+    public static ComponentLogger LOGGER = null;
+
     @Override
     public void onEnable() {
         System.setProperty("org.bytedeco.openblas.load", "mkl");
+        // System.setProperty("org.bytedeco.javacpp.logger.debug", "true");
+        // System.load("C:/Users/Aidan/.javacpp/cache/MachineLearningPlayer-1.0.0-SNAPSHOT.jar/org/bytedeco/pytorch/windows-x86_64/jnitorch.dll");
+        // Loader.load(org.bytedeco.javacpp.presets.javacpp.class);
+        // Loader.load(torch.class);
+
+        // try {
+        //     Loader.load(torch.class);
+        // } catch (UnsatisfiedLinkError e) {
+        //     String path = null;
+        //     try {
+        //         path = Loader.cacheResource(torch.class, "windows-x86_64/jnitorch.dll").getPath();
+        //         new ProcessBuilder("C:/Users/Aidan/Downloads/Dependencies_x64_Release/DependenciesGui.exe", path).start().waitFor();
+        //     } catch (InterruptedException | IOException ex) {
+        //         throw new RuntimeException(ex);
+        //     }
+        // }
+
+        LOGGER = this.getComponentLogger();
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(this, this);
@@ -77,6 +102,8 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         }
 
         TrainingManager.setup();
+
+        LOGGER.info("Hello, Machine Learning Player is starting!");
 
         Debugger.start();
         new BukkitRunnable() {

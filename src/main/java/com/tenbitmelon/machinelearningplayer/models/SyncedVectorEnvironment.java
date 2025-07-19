@@ -5,17 +5,30 @@ import org.bytedeco.pytorch.Tensor;
 
 import java.util.Arrays;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+
 public class SyncedVectorEnvironment {
+
+    private final AutoresetMode autoresetMode;
+    private final boolean[] terminated;
+    private final boolean[] truncated;
+    private final boolean[] autoresetEnvs;
 
     private final int numEnvs;
     private final MinecraftEnvironment[] environments;
 
-    public SyncedVectorEnvironment(int numEnvs) {
-        this.numEnvs = numEnvs;
+    public SyncedVectorEnvironment(ExperimentConfig args) {
+        this.numEnvs = args.numEnvs;
         this.environments = new MinecraftEnvironment[numEnvs];
         for (int i = 0; i < numEnvs; i++) {
-            environments[i] = new MinecraftEnvironment();
+            environments[i] = new MinecraftEnvironment(args);
+
         }
+
+        this.autoresetMode = AutoresetMode.NEXT_STEP;
+        this.terminated = new boolean[numEnvs];
+        this.truncated = new boolean[numEnvs];
+        this.autoresetEnvs = new boolean[numEnvs];
     }
 
     public Observation[] getObservation() {
@@ -33,27 +46,42 @@ public class SyncedVectorEnvironment {
     public VectorResetResult reset(int seed) {
         Observation[] observations = new Observation[numEnvs];
         Info[] infos = new Info[numEnvs];
+
         for (int i = 0; i < numEnvs; i++) {
-            ResetResult resetResult = environments[i].reset(seed);
+            ResetResult resetResult = environments[i].reset();
             observations[i] = resetResult.observation();
             infos[i] = resetResult.info();
+            terminated[i] = false;
+            truncated[i] = false;
+            autoresetEnvs[i] = false;
         }
         return new VectorResetResult(observations, infos);
     }
 
     public VectorStepResult step(Tensor action) {
+        LOGGER.info("Stepping in SyncedVectorEnvironment with action: {}", action);
         Observation[] observations = new Observation[numEnvs];
         double[] rewards = new double[numEnvs];
-        boolean[] terminated = new boolean[numEnvs];
-        boolean[] truncated = new boolean[numEnvs];
         Info[] infos = new Info[numEnvs];
+
         for (int i = 0; i < numEnvs; i++) {
-            StepResult stepResult = environments[i].step(action.get(i));
-            observations[i] = stepResult.observation();
-            rewards[i] = stepResult.reward();
-            terminated[i] = stepResult.terminated();
-            truncated[i] = stepResult.truncated();
-            infos[i] = stepResult.info();
+            if (autoresetEnvs[i]) {
+                ResetResult resetResult = environments[i].reset();
+                observations[i] = resetResult.observation();
+                infos[i] = resetResult.info();
+                rewards[i] = 0.0;
+                terminated[i] = false;
+                truncated[i] = false;
+            } else {
+                StepResult stepResult = environments[i].step(action.get(i));
+                observations[i] = stepResult.observation();
+                rewards[i] = stepResult.reward();
+                terminated[i] = stepResult.terminated();
+                truncated[i] = stepResult.truncated();
+                infos[i] = stepResult.info();
+            }
+
+            autoresetEnvs[i] = terminated[i] || truncated[i];
         }
         return new VectorStepResult(observations, rewards, terminated, truncated, infos);
     }
@@ -61,5 +89,11 @@ public class SyncedVectorEnvironment {
     public boolean isReady() {
         return Arrays.stream(environments)
             .allMatch(MinecraftEnvironment::isReady);
+    }
+
+    public enum AutoresetMode {
+        DISABLED,
+        NEXT_STEP,
+        SAME_STEP
     }
 }

@@ -2,18 +2,26 @@ package com.tenbitmelon.machinelearningplayer.environment;
 
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
+import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
+import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
+import com.tenbitmelon.machinelearningplayer.util.BlockDisplayBuilder;
+import net.kyori.adventure.text.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.*;
 import org.bukkit.craftbukkit.CraftServer;
+import org.bukkit.entity.BlockDisplay;
 import org.bukkit.util.BoundingBox;
 import org.bytedeco.pytorch.Scalar;
 import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.TensorIndex;
 import org.bytedeco.pytorch.TensorIndexVector;
-import org.joml.Vector3f;
+import org.joml.Matrix4f;
 
 import java.util.concurrent.CompletableFuture;
+
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 public class MinecraftEnvironment {
 
@@ -21,9 +29,10 @@ public class MinecraftEnvironment {
     public static final int GRID_SIZE_Y = 5;
     public static final int GRID_VOLUME = GRID_SIZE_XZ * GRID_SIZE_XZ * GRID_SIZE_Y;
 
-    public static final int MAX_STEPS_PER_EPISODE = 20;
-    public static final double GOAL_THRESHOLD = 0.25;
+    public static final double GOAL_THRESHOLD = 0.75;
     private static int nextEnvironmentId = 0;
+
+    private final ExperimentConfig args;
 
     private Agent agent;
     private Location roomLocation;
@@ -32,7 +41,9 @@ public class MinecraftEnvironment {
     private Vec3 goalPosition;
     private double previousDistanceToGoal;
 
-    public MinecraftEnvironment() {
+    public MinecraftEnvironment(ExperimentConfig args) {
+        this.args = args;
+        LOGGER.info("Initializing Minecraft environment");
         int w = (int) Math.floor((Math.sqrt(8 * nextEnvironmentId + 1) - 1) / 2);
         int t = (w * w + w) / 2;
 
@@ -81,6 +92,20 @@ public class MinecraftEnvironment {
         nextEnvironmentId++;
     }
 
+    public static double[] getRandomPointInCircle(double minDist, double maxDist) {
+        if (minDist < 0 || maxDist <= minDist) {
+            throw new IllegalArgumentException("Invalid min/max distance");
+        }
+
+        // Uniform distribution over the annulus area
+        double angle = Math.random() * 2 * Math.PI;
+        double radius = Math.sqrt(Math.random() * (maxDist * maxDist - minDist * minDist) + minDist * minDist);
+
+        double x = radius * Math.cos(angle);
+        double y = radius * Math.sin(angle);
+        return new double[]{x, y};
+    }
+
     public Observation getObservation() {
         Observation observation = new Observation();
 
@@ -124,9 +149,9 @@ public class MinecraftEnvironment {
 
         // Set position in block
         Tensor positionInBlock = observation.positionInBlock();
-        int x = (int) (position.x() - Math.floor(position.x()));
-        int y = (int) (position.y() - Math.floor(position.y()));
-        int z = (int) (position.z() - Math.floor(position.z()));
+        float x = (float) (position.x() - (int) (position.x()));
+        float y = (float) (position.y() - (int) (position.y()));
+        float z = (float) (position.z() - (int) (position.z()));
         positionInBlock.index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(x));
         positionInBlock.index_put_(new TensorIndexVector(new TensorIndex(1)), new Scalar(y));
         positionInBlock.index_put_(new TensorIndexVector(new TensorIndex(2)), new Scalar(z));
@@ -159,15 +184,28 @@ public class MinecraftEnvironment {
         goalDirection.index_put_(new TensorIndexVector(new TensorIndex(1)), new Scalar(goalDirectionVec.y));
         goalDirection.index_put_(new TensorIndexVector(new TensorIndex(2)), new Scalar(goalDirectionVec.z));
 
+
+        // Log the observation to the agent's debug log
+        agent.displayObservation(observation);
+
         return observation;
     }
 
     public Info getInfo() {
         double distanceToGoal = agent.position().distanceTo(goalPosition);
-        return new Info(distanceToGoal);
+
+        BlockDisplay bblock = new BlockDisplayBuilder(Debugger.WORLD).block(Material.RED_STAINED_GLASS.createBlockData()).build();
+        bblock.setTransformationMatrix(new Matrix4f().scale(0.1f));
+        bblock.teleport(new Location(Debugger.WORLD, agent.position().x, agent.position().y, agent.position().z));
+
+
+        Info info = new Info(distanceToGoal);
+        agent.displayInfo(info);
+
+        return info;
     }
 
-    public ResetResult reset(int seed) {
+    public ResetResult reset() {
         this.currentStep = 0;
         this.agent.reset(roomLocation.clone().add(8.5, 1.5, 8.5));
 
@@ -177,11 +215,33 @@ public class MinecraftEnvironment {
         //     roomLocation.getY() + 1.5 + (Math.random() - 0.5) * GRID_SIZE_Y,
         //     roomLocation.getZ() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ
         // );
+        // this.goalPosition = new Vec3(
+        //     (roomLocation.getX() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ),
+        //     (roomLocation.getY() + 1),
+        //     (roomLocation.getZ() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ)
+        // );
+        // if (Math.random() < 0.5) {
+        //     this.goalPosition = new Vec3(
+        //         roomLocation.getX() + (Math.random() - 0.5) * GRID_SIZE_XZ,
+        //         (roomLocation.getY() + 1),
+        //         roomLocation.getZ() + (Math.random() < 0.5 ? (-GRID_SIZE_XZ) : (GRID_SIZE_XZ)) / 2f
+        //     );
+        // } else {
+        //     this.goalPosition = new Vec3(
+        //         roomLocation.getX() + (Math.random() < 0.5 ? (-GRID_SIZE_XZ) : (GRID_SIZE_XZ)) / 2f,
+        //         (roomLocation.getY() + 1),
+        //         roomLocation.getZ() + (Math.random() - 0.5) * GRID_SIZE_XZ
+        //     );
+        // }
+        double[] randomPoint = getRandomPointInCircle(GRID_SIZE_XZ / 2f, GRID_SIZE_XZ);
         this.goalPosition = new Vec3(
-            (int) (roomLocation.getX() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ),
-            (int) (roomLocation.getY()),
-            (int) (roomLocation.getZ() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ)
+            roomLocation.getX() + 8.5 + randomPoint[0],
+            roomLocation.getY() + 1,
+            roomLocation.getZ() + 8.5 + randomPoint[1]
         );
+        BlockDisplay bblock = new BlockDisplayBuilder(Debugger.WORLD).block(Material.LIME_STAINED_GLASS.createBlockData()).build();
+        bblock.setTransformationMatrix(new Matrix4f().scale(0.1f));
+        bblock.teleport(new Location(Debugger.WORLD, goalPosition.x, goalPosition.y, goalPosition.z));
 
         Material randomConcrete = new Material[]{
             Material.WHITE_CONCRETE,
@@ -201,6 +261,7 @@ public class MinecraftEnvironment {
             Material.RED_CONCRETE
         }[(int) (Math.random() * 15)];
 
+        final int roomSize = 3; // inset 3 blocks from each side
         for (int offsetX = 0; offsetX < 16; offsetX++) {
             for (int offsetZ = 0; offsetZ < 16; offsetZ++) {
 
@@ -209,7 +270,7 @@ public class MinecraftEnvironment {
 
                 roomLocation.getWorld().getBlockAt(worldX, 0, worldZ).setType(Material.BARRIER);
 
-                if (offsetX > 4 && offsetX < 12 && offsetZ > 4 && offsetZ < 12) {
+                if (offsetX > roomSize && offsetX < (16 - roomSize) && offsetZ > roomSize && offsetZ < (16 - roomSize)) {
                     roomLocation.getWorld().getBlockAt(worldX, 0, worldZ).setType(randomConcrete);
                 }
 
@@ -217,7 +278,7 @@ public class MinecraftEnvironment {
         }
 
         roomLocation.getWorld().getBlockAt(roomLocation.getBlockX() + 8, 0, roomLocation.getBlockZ() + 8).setType(Material.GOLD_BLOCK);
-        roomLocation.getWorld().getBlockAt((int) goalPosition.x, (int) goalPosition.y, (int) goalPosition.z).setType(Material.EMERALD_BLOCK);
+        roomLocation.getWorld().getBlockAt((int) goalPosition.x, (int) roomLocation.getBlockY(), (int) goalPosition.z).setType(Material.EMERALD_BLOCK);
 
         Observation observation = getObservation();
         Info info = getInfo();
@@ -226,15 +287,22 @@ public class MinecraftEnvironment {
     }
 
     public StepResult step(Tensor actionTensor) {
+        LOGGER.info("Stepping in MinecraftEnvironment with actions");
         Action action = new Action(actionTensor);
 
         this.currentStep++;
 
+        LOGGER.info("Updating agent action pack with action before: {}", agent.actionPack);
         agent.actionPack.setSprinting(action.sprinting() == 1);
         agent.actionPack.setSneaking(action.sneaking() == 1);
-        agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, action.jumping() == 1 ? EntityPlayerActionPack.Action.continuous() : EntityPlayerActionPack.Action.once());
+        if (action.jumping() == 1) {
+            agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
+        }
 
-        agent.actionPack.turn(action.lookChange());
+        Vec2 rotation = action.lookChange();
+        LOGGER.info("Setting agent rotation: [{}, {}]", rotation.x, rotation.y);
+        agent.actionPack.turn(rotation);
+
 
         /*
         table:
@@ -245,28 +313,38 @@ public class MinecraftEnvironment {
         -1      | false          | true
         0       | true           | true
          */
-        int moveForward = (action.moveKeys().forward() ? 1 : 0) - (action.moveKeys().backward() ? 1 : 0);
-        int moveRight = (action.moveKeys().right() ? 1 : 0) - (action.moveKeys().left() ? 1 : 0);
+        Action.MovementKeys movementKeys = action.moveKeys();
+        LOGGER.info("Movement keys: {}", movementKeys);
+        int moveForward = (movementKeys.forward() == 1 ? 1 : 0) - (movementKeys.backward() == 1 ? 1 : 0);
+        int moveRight = (movementKeys.right() == 1 ? 1 : 0) - (movementKeys.left() == 1 ? 1 : 0);
 
         agent.actionPack.setForward(moveForward);
         agent.actionPack.setStrafing(moveRight);
 
+        LOGGER.info("Updating agent action pack with action after: {}", agent.actionPack);
 
         // --- Calculate rewards
         Info info = getInfo();
+
+        LOGGER.info("Calculating reward based on distance to goal: {}", info.distanceToGoal());
 
         double reward = (this.previousDistanceToGoal - info.distanceToGoal()) * 10.0; // Reward based on distance to goal
         previousDistanceToGoal = info.distanceToGoal();
 
         reward -= 0.5; // Small penalty for each step taken
 
+        LOGGER.info("Current step: {}, Reward: {}", this.currentStep, reward);
+
         boolean terminated = false;
         if (info.distanceToGoal() < GOAL_THRESHOLD) {
+            LOGGER.info("Goal reached! Distance to goal: {}", info.distanceToGoal());
             reward += 200.0; // Large reward for reaching the goal
             terminated = true;
         }
 
-        boolean truncated = this.currentStep > MAX_STEPS_PER_EPISODE;
+        boolean truncated = this.currentStep > this.args.numSteps;
+
+        LOGGER.info("Truncated step: {}", truncated);
 
         return new StepResult(getObservation(), reward, terminated, truncated, info);
     }

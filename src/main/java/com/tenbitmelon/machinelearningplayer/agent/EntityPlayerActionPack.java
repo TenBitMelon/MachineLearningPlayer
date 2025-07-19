@@ -38,11 +38,11 @@ public class EntityPlayerActionPack {
     public float forward;
     public float strafing;
 
-    private BlockPos currentBlock;
-    private int blockHitDelay;
-    private boolean isHittingBlock;
-    private float curBlockDamageMP;
-    private int itemUseCooldown;
+    public BlockPos currentBlock;
+    public int blockHitDelay;
+    public boolean isHittingBlock;
+    public float curBlockDamageMP;
+    public int itemUseCooldown;
 
     public EntityPlayerActionPack(Agent playerIn) {
         player = playerIn;
@@ -77,6 +77,10 @@ public class EntityPlayerActionPack {
             type.start(player, action); // noop
         }
         return this;
+    }
+
+    public boolean hasAction(ActionType type) {
+        return actions.containsKey(type);
     }
 
     public EntityPlayerActionPack setSneaking(boolean doSneak) {
@@ -252,6 +256,21 @@ public class EntityPlayerActionPack {
         player.setDeltaMovement(new Vec3(xa, ya, za));
     }
 
+    @Override
+    public String toString() {
+        return "EntityPlayerActionPack{" +
+            "sneaking=" + sneaking +
+            ", sprinting=" + sprinting +
+            ", forward=" + forward +
+            ", strafing=" + strafing +
+            ", currentBlock=" + currentBlock +
+            ", blockHitDelay=" + blockHitDelay +
+            ", isHittingBlock=" + isHittingBlock +
+            ", curBlockDamageMP=" + curBlockDamageMP +
+            ", itemUseCooldown=" + itemUseCooldown +
+            '}';
+    }
+
     public enum ActionType {
         USE(true) {
             @Override
@@ -403,6 +422,7 @@ public class EntityPlayerActionPack {
         JUMP(true) {
             @Override
             boolean execute(Agent player, Action action) {
+                System.out.println("Jumping with action: " + action);
                 if (action.limit == 1) {
                     if (player.onGround()) player.jumpFromGround(); // onGround
                 } else {
@@ -491,6 +511,19 @@ public class EntityPlayerActionPack {
 
         public static Action interval(int interval, int offset) {
             return new Action(-1, interval, offset, false);
+        }
+
+        @Override
+        public String toString() {
+            return "Action{" +
+                "limit=" + limit +
+                ", interval=" + interval +
+                ", offset=" + offset +
+                ", isContinuous=" + isContinuous +
+                ", done=" + done +
+                ", count=" + count +
+                ", next=" + next +
+                '}';
         }
 
         Boolean tick(EntityPlayerActionPack actionPack, ActionType type) {

@@ -6,8 +6,10 @@ import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.apache.commons.lang3.tuple.MutableTriple;
 import org.apache.commons.lang3.tuple.Triple;
+import org.bytedeco.pytorch.Tensor;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 
@@ -256,5 +258,69 @@ public class Utils {
         String componentText = PlainTextComponentSerializer.plainText().serialize(component);
         return stringWidth(componentText);
     }
+
+
+    public static String tensorString(Tensor tensor) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(Arrays.toString(tensor.shape()));
+        sb.append(": ");
+        if (tensor.shape().length <= 1) {
+            // Scalars and 1D tensors: keep everything on one line
+            formatTensorInline(tensor, sb);
+        } else {
+            // 2D or higher: pretty print as grid
+            sb.append("\n");
+            formatTensor(tensor, sb, 0);
+        }
+        return sb.toString();
+    }
+
+    private static void formatTensorInline(Tensor tensor, StringBuilder sb) {
+        long[] shape = tensor.shape();
+
+        if (shape.length == 0) {
+            sb.append(tensor.item().toFloat());
+            return;
+        }
+
+        sb.append("[");
+        for (int i = 0; i < shape[0]; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(tensor.get(i).item().toFloat());
+        }
+        sb.append("]");
+    }
+
+    private static void formatTensor(Tensor tensor, StringBuilder sb, int indent) {
+        long[] shape = tensor.shape();
+
+        if (shape.length == 0) {
+            sb.append(tensor.item().toFloat());
+            return;
+        }
+
+        if (shape.length == 1) {
+            sb.append(" ".repeat(indent));
+            sb.append("[");
+            for (int i = 0; i < shape[0]; i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(tensor.get(i).item().toFloat());
+            }
+            sb.append("]");
+            return;
+        }
+
+        String indentStr = " ".repeat(indent);
+        sb.append(indentStr).append("[\n");
+        for (int i = 0; i < shape[0]; i++) {
+            sb.append(indentStr).append("  ");
+            formatTensor(tensor.get(i), sb, indent + 2);
+            if (i < shape[0] - 1) sb.append(",");
+            sb.append("\n");
+        }
+        sb.append(indentStr).append("]");
+    }
+
+
 }
 

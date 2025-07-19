@@ -3,6 +3,7 @@ plugins {
     id("io.papermc.paperweight.userdev") version "2.0.0-beta.17"
     id("xyz.jpenilla.run-paper") version "2.3.1"
 
+//    id("org.bytedeco.gradle-javacpp-platform") version "1.5.12"
     id("org.bytedeco.gradle-javacpp-platform") version "1.5.10"
 
     id("com.gradleup.shadow") version "8.3.6"
@@ -38,11 +39,21 @@ dependencies {
 //    implementation("ai.djl:api:0.28.0")
 //    implementation("org.slf4j:slf4j-simple:1.7.36")
 
-    implementation("org.bytedeco:pytorch:2.7.0-1.5.12-20250515.041143-31")
-    implementation("org.bytedeco:pytorch:2.7.0-1.5.12-20250515.041143-31:windows-x86_64")
+//  implementation("org.bytedeco:pytorch:2.7.0-1.5.12-20250515.041143-31")
+//  implementation("org.bytedeco:pytorch:2.7.0-1.5.12-20250515.041143-31:windows-x86_64")
 
-    implementation("org.bytedeco:openblas:0.3.29-1.5.12-20250319.041331-18")
-    implementation("org.bytedeco:openblas:0.3.29-1.5.12-20250319.041331-18:windows-x86_64")
+//                               pytorch-2.7.1-1.5.12-20250613.191229-12-windows-x86_64.jar
+    implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.191229-12")
+    implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.191229-12:windows-x86_64")
+//    implementation("org.bytedeco:pytorch:2.7.0-1.5.12-20250613.043415-65:windows-x86_64-gpu")
+
+//    implementation("org.bytedeco:openblas:0.3.29-1.5.12-20250319.041331-18")
+//    implementation("org.bytedeco:openblas:0.3.29-1.5.12-20250319.041331-18:windows-x86_64")
+//                               openblas-0.3.29-1.5.12-20250601.130149-30-windows-x86_64.jar
+    implementation("org.bytedeco:openblas:0.3.29-1.5.12-20250601.130149-30:windows-x86_64")
+
+
+//    implementation("org.bytedeco:mkl:
 }
 
 tasks {

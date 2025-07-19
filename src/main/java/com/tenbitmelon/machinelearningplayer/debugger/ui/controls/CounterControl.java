@@ -21,7 +21,7 @@ public class CounterControl extends Control {
         super(title);
         this.getter = value;
         this.setter = setter;
-        blockDisplay = new BlockDisplayBuilder(Debugger.WORLD).block(Material.BAMBOO_BLOCK.createBlockData()).build();
+        blockDisplay = new BlockDisplayBuilder(Debugger.WORLD).block(Material.MELON.createBlockData()).build();
         blockDisplay.setTransformationMatrix(new Matrix4f().scale(0.2f));
     }
 
