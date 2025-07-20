@@ -1,11 +1,8 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
 import com.tenbitmelon.machinelearningplayer.environment.Info;
-import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import org.bytedeco.pytorch.Tensor;
-import org.bytedeco.pytorch.TensorIndex;
-import org.bytedeco.pytorch.TensorIndexVector;
 import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 

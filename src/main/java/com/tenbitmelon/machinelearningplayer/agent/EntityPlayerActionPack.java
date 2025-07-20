@@ -1,10 +1,5 @@
 package com.tenbitmelon.machinelearningplayer.agent;
 
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,13 +17,12 @@ import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.entity.vehicle.Minecart;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec2;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.*;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class EntityPlayerActionPack {
     private final Agent player;
@@ -171,7 +165,7 @@ public class EntityPlayerActionPack {
         } else {
             entities = player.level().getEntities(player, player.getBoundingBox().inflate(3.0D, 1.0D, 3.0D));
         }
-        if (entities.size() == 0)
+        if (entities.isEmpty())
             return this;
         Entity closest = null;
         double distance = Double.POSITIVE_INFINITY;

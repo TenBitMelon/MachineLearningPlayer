@@ -2,26 +2,19 @@ package com.tenbitmelon.machinelearningplayer.environment;
 
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
-import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
-import com.tenbitmelon.machinelearningplayer.util.BlockDisplayBuilder;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.*;
 import org.bukkit.craftbukkit.CraftServer;
-import org.bukkit.entity.BlockDisplay;
 import org.bukkit.util.BoundingBox;
 import org.bytedeco.pytorch.Scalar;
 import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.TensorIndex;
 import org.bytedeco.pytorch.TensorIndexVector;
-import org.joml.Matrix4f;
 
 import java.util.concurrent.CompletableFuture;
-
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class MinecraftEnvironment {
 
@@ -33,10 +26,9 @@ public class MinecraftEnvironment {
     private static int nextEnvironmentId = 0;
 
     private final ExperimentConfig args;
-
+    private final Location roomLocation;
+    private final BoundingBox boundingBox;
     private Agent agent;
-    private Location roomLocation;
-    private BoundingBox boundingBox;
     private int currentStep = 0;
     private Vec3 goalPosition;
     private double previousDistanceToGoal;
@@ -87,9 +79,7 @@ public class MinecraftEnvironment {
         MinecraftServer server = ((CraftServer) Bukkit.getServer()).getServer();
         CompletableFuture<Agent> completableFuture = Agent.spawn(server, new Location(world, startX + 8.5, 1.5, startZ + 8.5));
         completableFuture.whenComplete((agent, throwable) -> {
-            if (throwable != null) {
-                throwable.printStackTrace();
-            } else {
+            if (throwable == null) {
                 this.agent = agent;
             }
         });
@@ -316,7 +306,7 @@ public class MinecraftEnvironment {
         }
 
         roomLocation.getWorld().getBlockAt(roomLocation.getBlockX() + 8, 0, roomLocation.getBlockZ() + 8).setType(Material.GOLD_BLOCK);
-        roomLocation.getWorld().getBlockAt((int) goalPosition.x, (int) roomLocation.getBlockY(), (int) goalPosition.z).setType(Material.EMERALD_BLOCK);
+        roomLocation.getWorld().getBlockAt((int) goalPosition.x, roomLocation.getBlockY(), (int) goalPosition.z).setType(Material.EMERALD_BLOCK);
 
         Observation observation = getObservation();
         Info info = getInfo();

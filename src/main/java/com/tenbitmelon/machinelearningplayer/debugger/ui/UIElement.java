@@ -1,6 +1,5 @@
 package com.tenbitmelon.machinelearningplayer.debugger.ui;
 
-import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.util.InteractionBuilder;
 import com.tenbitmelon.machinelearningplayer.util.TextDisplayBuilder;
@@ -14,18 +13,12 @@ import org.bukkit.util.Vector;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 
-import javax.annotation.Nullable;
-import java.util.UUID;
-
 public abstract class UIElement {
 
     public static boolean ALLOW_UPDATES = true; // Set to false to disable updates for all UIElements, useful for performance during training
-
-    public int width = 0;
-    public int height = 0;
+    final TextDisplay anchorText;
+    final Interaction anchorInteraction;
     public boolean dirty = true;
-    TextDisplay anchorText;
-    Interaction anchorInteraction;
     Entity anchorEntity;
     Vector3d position = new Vector3d(0, 0, 0);
     double direction = 180;

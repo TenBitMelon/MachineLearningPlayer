@@ -2,9 +2,6 @@ package com.tenbitmelon.machinelearningplayer.environment;
 
 import net.minecraft.world.phys.Vec2;
 import org.bytedeco.pytorch.Tensor;
-import org.joml.Vector4i;
-
-import java.util.Arrays;
 
 public class Action {
     // double[] lookChange,
@@ -27,7 +24,7 @@ public class Action {
 
     public static final int ACTION_SPACE_SIZE = OFFSET_MOVE_KEYS + SIZE_MOVE_KEYS;
 
-    Tensor data;
+    final Tensor data;
 
     public Action(Tensor data) {
         this.data = data;

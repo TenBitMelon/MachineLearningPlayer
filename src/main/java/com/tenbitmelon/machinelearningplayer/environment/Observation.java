@@ -27,7 +27,7 @@ public class Observation {
 
     public static final int OBSERVATION_SPACE_SIZE = OFFSET_GOAL_DIRECTION + SIZE_GOAL_DIRECTION;
 
-    Tensor data;
+    final Tensor data;
 
     public Observation() {
         this.data = torch.zeros(OBSERVATION_SPACE_SIZE);

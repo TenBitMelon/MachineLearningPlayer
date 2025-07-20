@@ -1,13 +1,12 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
-import net.kyori.adventure.text.logger.slf4j.ComponentLogger;
 import org.slf4j.event.Level;
 
 import java.util.HashMap;
 
 public class Logger {
 
-    public HashMap<Level, Boolean> enabledLevels = new HashMap<>();
+    public final HashMap<Level, Boolean> enabledLevels = new HashMap<>();
 
     public Logger() {
         enabledLevels.put(Level.TRACE, true);

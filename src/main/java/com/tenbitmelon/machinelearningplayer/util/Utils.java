@@ -5,7 +5,6 @@ import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.apache.commons.lang3.tuple.MutableTriple;
-import org.apache.commons.lang3.tuple.Triple;
 import org.bytedeco.pytorch.Tensor;
 
 import java.util.ArrayList;
@@ -221,7 +220,7 @@ public class Utils {
     }
 
     public static double roundRotation(double rotation, int steps) {
-        return Math.round(rotation / (360 / steps)) * (360 / steps);
+        return Math.round(rotation / (360f / steps)) * (360f / steps);
     }
 
     public static List<MutableTriple<Integer, Integer, ClickEvent>> findClickEvents(Component component) {
@@ -264,30 +263,8 @@ public class Utils {
         StringBuilder sb = new StringBuilder();
         sb.append(Arrays.toString(tensor.shape()));
         sb.append(": ");
-        if (tensor.shape().length <= 1) {
-            // Scalars and 1D tensors: keep everything on one line
-            formatTensorInline(tensor, sb);
-        } else {
-            // 2D or higher: pretty print as grid
-            formatTensor(tensor, sb, 0);
-        }
+        formatTensor(tensor, sb, 0);
         return sb.toString();
-    }
-
-    private static void formatTensorInline(Tensor tensor, StringBuilder sb) {
-        long[] shape = tensor.shape();
-
-        if (shape.length == 0) {
-            sb.append(tensor.item().toFloat());
-            return;
-        }
-
-        sb.append("[");
-        for (int i = 0; i < shape[0]; i++) {
-            if (i > 0) sb.append(", ");
-            sb.append(tensor.get(i).item().toFloat());
-        }
-        sb.append("]");
     }
 
     private static void formatTensor(Tensor tensor, StringBuilder sb, int indent) {

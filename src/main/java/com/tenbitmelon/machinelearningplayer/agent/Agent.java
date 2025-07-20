@@ -3,13 +3,15 @@ package com.tenbitmelon.machinelearningplayer.agent;
 import com.mojang.authlib.GameProfile;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.*;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.Control;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.TextControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import com.tenbitmelon.machinelearningplayer.environment.Info;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
+import net.kyori.adventure.text.Component;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.DisconnectionDetails;
-import net.kyori.adventure.text.Component;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
 import net.minecraft.network.protocol.game.ClientboundRotateHeadPacket;
@@ -32,11 +34,9 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.entity.SkullBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.portal.TeleportTransition;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
-import org.jetbrains.annotations.NotNull;
 import org.joml.Vector3d;
 
 import java.util.ArrayList;
@@ -45,15 +45,13 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
-@SuppressWarnings("UnstableApiUsage")
 public class Agent extends ServerPlayer {
 
     public final EntityPlayerActionPack actionPack = new EntityPlayerActionPack(this);
+    final ControlsWindow debugWindow = new ControlsWindow();
+    final TextControl infoDisplayControl = new TextControl("Latest Info: ");
     private final ArrayList<Control> observationSectionControls = new ArrayList<>();
-    ControlsWindow debugWindow = new ControlsWindow();
-    TextControl infoDisplayControl = new TextControl("Latest Info: ");
     private boolean ready = false;
 
     public Agent(MinecraftServer server, ServerLevel level, GameProfile gameProfile, ClientInformation clientInformation) {
@@ -106,7 +104,7 @@ public class Agent extends ServerPlayer {
 
             Agent instance = new Agent(server, worldIn, current, ClientInformation.createDefault());
             instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
-            server.getPlayerList().placeNewPlayer(new FakeClientConnection(instance, PacketFlow.SERVERBOUND), instance, new CommonListenerCookie(current, 0, instance.clientInformation(), false));
+            server.getPlayerList().placeNewPlayer(new FakeClientConnection(PacketFlow.SERVERBOUND), instance, new CommonListenerCookie(current, 0, instance.clientInformation(), false));
             instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
             instance.teleportTo(worldIn, location.getX(), location.getY(), location.getZ(), Set.of(), 0.0f, 0.0f, true);
             instance.setHealth(20.0F);

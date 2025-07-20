@@ -16,19 +16,17 @@ import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
-import java.util.*;
-import java.util.function.Supplier;
+import java.util.ArrayList;
 
 public class ControlsWindow extends UIElement {
 
-    private final ArrayList<Control> controls = new ArrayList<>();
-    TextDisplay display = new TextDisplayBuilder(Debugger.WORLD)
+    final TextDisplay display = new TextDisplayBuilder(Debugger.WORLD)
         .billboard(Display.Billboard.FIXED)
         .alignment(TextDisplay.TextAlignment.LEFT)
         .lineWidth(2000)
         .teleportDuration(1)
         .build();
-    TextDisplay displayBack = new TextDisplayBuilder(Debugger.WORLD)
+    final TextDisplay displayBack = new TextDisplayBuilder(Debugger.WORLD)
         .billboard(Display.Billboard.FIXED)
         .alignment(TextDisplay.TextAlignment.LEFT)
         .lineWidth(2000)
@@ -37,6 +35,7 @@ public class ControlsWindow extends UIElement {
         .transformation(new Transformation(new Vector3f(1), new AxisAngle4f(0, 0, 0, 0), new Vector3f(1), new AxisAngle4f(0, 0, 0, 0)))
         .transformationMatrix(new Matrix4f().scale(-1, 1, 1))
         .build();
+    private final ArrayList<Control> controls = new ArrayList<>();
 
     public ControlsWindow() {
         super();

@@ -1,7 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.CounterControl;
@@ -13,10 +12,11 @@ import org.bukkit.Bukkit;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.global.torch;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Random;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class TrainingManager {
 

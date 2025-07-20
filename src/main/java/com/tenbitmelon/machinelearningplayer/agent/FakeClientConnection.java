@@ -11,20 +11,16 @@ import org.jetbrains.annotations.Nullable;
 
 public class FakeClientConnection extends Connection {
 
-    private final Agent agent;
-
-    public FakeClientConnection(Agent agent, PacketFlow p) {
+    public FakeClientConnection(PacketFlow p) {
         super(p);
         // compat with adventure-platform-fabric. This does NOT trigger other vanilla handlers for establishing a channel
         // also makes #isOpen return true, allowing enderpearls to teleport fake players
         // ((ClientConnectionInterface)this).setChannel(new EmbeddedChannel());
         this.channel = new EmbeddedChannel();
-        this.agent = agent;
     }
 
     @Override
     public void send(Packet<?> packet, @Nullable PacketSendListener listener, boolean flush) {
-        // if (packet inst78
     }
 
     @Override

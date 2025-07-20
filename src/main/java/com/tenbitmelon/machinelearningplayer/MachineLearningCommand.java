@@ -8,7 +8,10 @@ import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.minecraft.server.MinecraftServer;
-import org.bukkit.*;
+import org.bukkit.Chunk;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
 import org.slf4j.event.Level;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;

@@ -1,29 +1,22 @@
 package com.tenbitmelon.machinelearningplayer.debugger.ui;
 
-import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
-import com.tenbitmelon.machinelearningplayer.util.Utils;
 import com.tenbitmelon.machinelearningplayer.util.TextDisplayBuilder;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import org.bukkit.Location;
-import org.bukkit.block.BlockFace;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.TextDisplay;
-import org.jetbrains.annotations.NotNull;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 
-import java.awt.*;
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 
 public class TextWindow extends UIElement {
 
-    ArrayList<Component> lines = new ArrayList<>();
-    TextDisplay display = new TextDisplayBuilder(Debugger.WORLD).billboard(Display.Billboard.FIXED).alignment(TextDisplay.TextAlignment.LEFT).lineWidth(2000).teleportDuration(1).build();
+    final ArrayList<Component> lines = new ArrayList<>();
+    final TextDisplay display = new TextDisplayBuilder(Debugger.WORLD).billboard(Display.Billboard.FIXED).alignment(TextDisplay.TextAlignment.LEFT).lineWidth(2000).teleportDuration(1).build();
 
     public TextWindow() {}
 

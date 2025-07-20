@@ -1,12 +1,8 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
 import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
-import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import com.tenbitmelon.machinelearningplayer.util.Utils;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -24,10 +20,10 @@ import java.util.UUID;
 public class Debugger {
 
     public static final HashMap<UUID, UIElement> AWAITING_ANCHOR = new HashMap<>();
-    public static World WORLD = Bukkit.getWorlds().getFirst();
-    public static HashMap<UUID, UIElement> DRAGGED_ELEMENTS = new HashMap<>();
-    public static ControlsWindow mainDebugWindow;
-    static ArrayList<UIElement> elements = new ArrayList<>();
+    public static final World WORLD = Bukkit.getWorlds().getFirst();
+    public static final HashMap<UUID, UIElement> DRAGGED_ELEMENTS = new HashMap<>();
+    public static final ControlsWindow mainDebugWindow;
+    static final ArrayList<UIElement> elements = new ArrayList<>();
 
     static {
         mainDebugWindow = new ControlsWindow();
@@ -41,14 +37,6 @@ public class Debugger {
 
     private Debugger() {
         throw new IllegalStateException("Utility class");
-    }
-
-    public static void organizeElementsAround(Vector3d position) {
-        Vector3d offset = new Vector3d(position);
-        for (UIElement element : elements) {
-            element.setPosition(offset);
-            //      offset.add(0, element.height + 4, 0);
-        }
     }
 
     public static void addElement(UIElement element) {

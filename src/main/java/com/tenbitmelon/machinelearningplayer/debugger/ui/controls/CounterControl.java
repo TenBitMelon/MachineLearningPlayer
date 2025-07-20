@@ -13,9 +13,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class CounterControl extends Control {
+    final BlockDisplay blockDisplay;
     private final Supplier<Integer> getter;
     private final Consumer<Integer> setter;
-    BlockDisplay blockDisplay;
 
     public CounterControl(Component title, Supplier<Integer> value, Consumer<Integer> setter) {
         super(title);

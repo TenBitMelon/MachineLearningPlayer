@@ -5,11 +5,9 @@ import org.bytedeco.pytorch.Tensor;
 
 import java.util.Arrays;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-
 public class SyncedVectorEnvironment {
 
-    private final AutoresetMode autoresetMode;
+    // private final AutoresetMode autoresetMode;
     private final boolean[] terminated;
     private final boolean[] truncated;
     private final boolean[] autoresetEnvs;
@@ -25,7 +23,7 @@ public class SyncedVectorEnvironment {
 
         }
 
-        this.autoresetMode = AutoresetMode.NEXT_STEP;
+        // this.autoresetMode = AutoresetMode.NEXT_STEP;
         this.terminated = new boolean[numEnvs];
         this.truncated = new boolean[numEnvs];
         this.autoresetEnvs = new boolean[numEnvs];

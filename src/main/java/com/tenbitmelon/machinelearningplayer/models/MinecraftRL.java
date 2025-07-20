@@ -6,16 +6,16 @@ import com.tenbitmelon.machinelearningplayer.util.distrobutions.Bernoulli;
 import com.tenbitmelon.machinelearningplayer.util.distrobutions.Normal;
 import org.bytedeco.javacpp.LongPointer;
 import org.bytedeco.pytorch.*;
-import org.bytedeco.pytorch.global.torch;
 import org.bytedeco.pytorch.Module;
+import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
-
 public class MinecraftRL extends Module {
 
+    public final long otherFeaturesDim = 128;
+    public final long sharedOutDim = 256;
+    public final long lstmHiddenSize = 128;
     private final SequentialImpl voxelCNN;
     private final SequentialImpl otherInputsProcessor;
     private final SequentialImpl sharedNetwork;
@@ -27,10 +27,6 @@ public class MinecraftRL extends Module {
     private final LinearImpl actorSneakKey;
     private final LinearImpl actorJumpKey;
     private final LinearImpl actorMoveKeys;
-
-    public long otherFeaturesDim = 128;
-    public long sharedOutDim = 256;
-    public long lstmHiddenSize = 128;
 
     public MinecraftRL(SyncedVectorEnvironment environment) {
 
@@ -255,9 +251,7 @@ public class MinecraftRL extends Module {
         // torch.orthogonal_(layer.weight(), std);
 
         // Xavier/Glorot normal initialization ???
-        double fan_in = inputsDim;
-        double fan_out = outputDims;
-        double xavier_std = Math.sqrt(2.0 / (fan_in + fan_out)) * std;
+        double xavier_std = Math.sqrt(2.0 / ((double) inputsDim + (double) outputDims)) * std;
         torch.normal_(layer.weight(), 0.0, xavier_std);
 
         torch.constant_(layer.bias(), new Scalar(0.0f));
@@ -422,10 +416,9 @@ public class MinecraftRL extends Module {
         States states = this.getStates(observation, lstmState, done);
         Tensor hidden = states.newHiddenTensor;
         // LOGGER.debug("Hidden tensor shape for critic: {}", hidden.shape());
-        Tensor value = this.critic.forward(hidden);
         // LOGGER.debug("Output value shape from critic: {}", value.shape());
         // LOGGER.debug("--- Exiting getValue ---");
-        return value;
+        return this.critic.forward(hidden);
     }
 
     public ActionAndValue getActionAndValue(Tensor nextObs, LSTMState nextLstmState, Tensor nextDone) {

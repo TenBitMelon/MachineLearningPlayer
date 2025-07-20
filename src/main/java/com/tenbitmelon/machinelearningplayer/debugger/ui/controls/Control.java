@@ -20,13 +20,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 public abstract class Control {
+    private final HashMap<UUID, ClickEvent> interactionEntityToClickEvent = new HashMap<>();
+    private final HashMap<UUID, Interaction> uuidToInteraction = new HashMap<>();
     public Component label;
-    private HashMap<UUID, ClickEvent> interactionEntityToClickEvent = new HashMap<>();
-    private HashMap<UUID, Interaction> uuidToInteraction = new HashMap<>();
 
     public Control(Component label) {
         this.label = label;
