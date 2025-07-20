@@ -2,17 +2,16 @@ package com.tenbitmelon.machinelearningplayer;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
-import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
-import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.minecraft.server.MinecraftServer;
 import org.bukkit.*;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
+import org.slf4j.event.Level;
+
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 @SuppressWarnings("UnstableApiUsage")
 public class MachineLearningCommand {
@@ -22,7 +21,45 @@ public class MachineLearningCommand {
             .executes(ctx -> {
                 ctx.getSource().getSender().sendPlainMessage("[STATS]");
                 return Command.SINGLE_SUCCESS;
-            });
+            })
+            .then(Commands.literal("uiupdates").executes(ctx -> {
+                boolean wasEnabled = UIElement.ALLOW_UPDATES;
+                UIElement.ALLOW_UPDATES = !wasEnabled;
+                ctx.getSource().getSender().sendPlainMessage("UI updates " + (wasEnabled ? "disabled" : "enabled"));
+                return Command.SINGLE_SUCCESS;
+            }))
+            .then(Commands.literal("loglevel")
+                .then(Commands.literal("debug")
+                    .executes(ctx -> {
+                        boolean wasEnabled = LOGGER.isEnabled(Level.DEBUG);
+                        LOGGER.setEnabled(Level.DEBUG, !wasEnabled);
+                        ctx.getSource().getSender().sendPlainMessage("Debug logging " + (wasEnabled ? "disabled" : "enabled"));
+                        return Command.SINGLE_SUCCESS;
+                    }))
+                .then(Commands.literal("info")
+                    .executes(ctx -> {
+                        LOGGER.setEnabled(Level.INFO, true);
+                        ctx.getSource().getSender().sendPlainMessage("Info logging enabled");
+                        return Command.SINGLE_SUCCESS;
+                    }))
+                .then(Commands.literal("warn")
+                    .executes(ctx -> {
+                        LOGGER.setEnabled(Level.WARN, true);
+                        ctx.getSource().getSender().sendPlainMessage("Warn logging enabled");
+                        return Command.SINGLE_SUCCESS;
+                    }))
+                .then(Commands.literal("error")
+                    .executes(ctx -> {
+                        LOGGER.setEnabled(Level.ERROR, true);
+                        ctx.getSource().getSender().sendPlainMessage("Error logging enabled");
+                        return Command.SINGLE_SUCCESS;
+                    }))
+                .then(Commands.literal("trace")
+                    .executes(ctx -> {
+                        LOGGER.setEnabled(Level.TRACE, true);
+                        ctx.getSource().getSender().sendPlainMessage("Trace logging enabled");
+                        return Command.SINGLE_SUCCESS;
+                    })));
 
         return commandBuilder.build();
     }

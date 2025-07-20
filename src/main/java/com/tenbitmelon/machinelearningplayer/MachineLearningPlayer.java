@@ -1,19 +1,13 @@
 package com.tenbitmelon.machinelearningplayer;
 
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
+import com.tenbitmelon.machinelearningplayer.debugger.Logger;
 import com.tenbitmelon.machinelearningplayer.events.EntityInteractEvent;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
-import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.logger.slf4j.ComponentLogger;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.ServerTickRateManager;
-import net.minecraft.server.dedicated.DedicatedPlayerList;
-import net.minecraft.server.dedicated.DedicatedServer;
 import org.bukkit.*;
-import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -22,21 +16,12 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.scheduler.BukkitScheduler;
-import org.bytedeco.javacpp.Loader;
-import org.bytedeco.pytorch.*;
-import org.bytedeco.pytorch.Module;
-import org.bytedeco.pytorch.presets.torch;
-
-import java.io.IOException;
-
-import static com.tenbitmelon.machinelearningplayer.MachineLearningCommand.createRooms;
-import static org.bytedeco.pytorch.global.torch.*;
+import org.slf4j.event.Level;
 
 @SuppressWarnings("UnstableApiUsage")
 public final class MachineLearningPlayer extends JavaPlugin implements Listener {
 
-    public static ComponentLogger LOGGER = null;
+    public static Logger LOGGER = null;
 
     @Override
     public void onEnable() {
@@ -58,7 +43,8 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         //     }
         // }
 
-        LOGGER = this.getComponentLogger();
+        LOGGER = new Logger();
+        LOGGER.setEnabled(Level.DEBUG, false);
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(this, this);

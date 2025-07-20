@@ -269,7 +269,6 @@ public class Utils {
             formatTensorInline(tensor, sb);
         } else {
             // 2D or higher: pretty print as grid
-            sb.append("\n");
             formatTensor(tensor, sb, 0);
         }
         return sb.toString();
@@ -311,7 +310,7 @@ public class Utils {
         }
 
         String indentStr = " ".repeat(indent);
-        sb.append(indentStr).append("[\n");
+        sb.append(indentStr).append("[");
         for (int i = 0; i < shape[0]; i++) {
             sb.append(indentStr).append("  ");
             formatTensor(tensor.get(i), sb, indent + 2);

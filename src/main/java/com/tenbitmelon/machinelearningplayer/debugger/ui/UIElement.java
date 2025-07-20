@@ -19,6 +19,8 @@ import java.util.UUID;
 
 public abstract class UIElement {
 
+    public static boolean ALLOW_UPDATES = true; // Set to false to disable updates for all UIElements, useful for performance during training
+
     public int width = 0;
     public int height = 0;
     public boolean dirty = true;
@@ -101,6 +103,7 @@ public abstract class UIElement {
     }
 
     public void update() {
+        if (!ALLOW_UPDATES) return;
         if (anchorEntity == null) return;
 
         Vector center = anchorEntity.getBoundingBox().getCenter();

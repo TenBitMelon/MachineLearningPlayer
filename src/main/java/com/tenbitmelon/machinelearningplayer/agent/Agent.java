@@ -2,6 +2,7 @@ package com.tenbitmelon.machinelearningplayer.agent;
 
 import com.mojang.authlib.GameProfile;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.*;
 import com.tenbitmelon.machinelearningplayer.environment.Info;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
@@ -44,6 +45,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 @SuppressWarnings("UnstableApiUsage")
 public class Agent extends ServerPlayer {
@@ -126,6 +128,7 @@ public class Agent extends ServerPlayer {
     }
 
     public void displayObservation(Observation observation) {
+        if (!UIElement.ALLOW_UPDATES) return;
         observationSectionControls.forEach(debugWindow::removeControl);
         observationSectionControls.clear();
 
@@ -146,6 +149,7 @@ public class Agent extends ServerPlayer {
     }
 
     public void displayInfo(Info info) {
+        if (!UIElement.ALLOW_UPDATES) return;
         infoDisplayControl.setValue(String.valueOf(info.distanceToGoal()));
     }
 
@@ -169,6 +173,7 @@ public class Agent extends ServerPlayer {
 
     @Override
     public void tick() {
+        // LOGGER.info("Agent {} tick", this.getName().getString()); // AGENTS GET TICKED BEFORE the loop tick
         actionPack.onUpdate();
         if (this.getServer().getTickCount() % 10 == 0) {
             this.connection.resetPosition();
@@ -182,7 +187,7 @@ public class Agent extends ServerPlayer {
             // the game not gonna crash violently.
         }
 
-        debugWindow.refresh();
+        if (UIElement.ALLOW_UPDATES) debugWindow.refresh();
     }
 
     private void shakeOff() {

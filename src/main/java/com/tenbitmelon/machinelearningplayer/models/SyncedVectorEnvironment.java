@@ -58,8 +58,18 @@ public class SyncedVectorEnvironment {
         return new VectorResetResult(observations, infos);
     }
 
-    public VectorStepResult step(Tensor action) {
-        LOGGER.info("Stepping in SyncedVectorEnvironment with action: {}", action);
+    public void preTickStep(Tensor action) {
+        // LOGGER.debug("Stepping in SyncedVectorEnvironment with action: {}", action);
+
+        for (int i = 0; i < numEnvs; i++) {
+            if (!autoresetEnvs[i]) {
+                environments[i].preTickStep(action.get(i));
+            }
+        }
+    }
+
+    public VectorStepResult postTickStep() {
+        // LOGGER.debug("Post tick stepping in SyncedVectorEnvironment");
         Observation[] observations = new Observation[numEnvs];
         double[] rewards = new double[numEnvs];
         Info[] infos = new Info[numEnvs];
@@ -73,7 +83,7 @@ public class SyncedVectorEnvironment {
                 terminated[i] = false;
                 truncated[i] = false;
             } else {
-                StepResult stepResult = environments[i].step(action.get(i));
+                StepResult stepResult = environments[i].postTickStep();
                 observations[i] = stepResult.observation();
                 rewards[i] = stepResult.reward();
                 terminated[i] = stepResult.terminated();

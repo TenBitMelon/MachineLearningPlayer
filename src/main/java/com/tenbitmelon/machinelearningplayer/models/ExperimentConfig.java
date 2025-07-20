@@ -50,7 +50,7 @@ public class ExperimentConfig {
      * Total timesteps of the experiments.
      */
     // public int totalTimesteps = 5;
-    public int totalTimesteps = 10000000;
+    // public int totalTimesteps = 10_000_000;
     /**
      * The learning rate of the optimizer.
      */

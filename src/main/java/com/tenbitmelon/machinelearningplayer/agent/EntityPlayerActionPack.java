@@ -28,6 +28,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+
 public class EntityPlayerActionPack {
     private final Agent player;
 
@@ -100,11 +102,13 @@ public class EntityPlayerActionPack {
     }
 
     public EntityPlayerActionPack setForward(float value) {
+        // LOGGER.debug("Setting forward to {}", value);
         forward = value;
         return this;
     }
 
     public EntityPlayerActionPack setStrafing(float value) {
+        // LOGGER.debug("Setting strafing to {}", value);
         strafing = value;
         return this;
     }
@@ -422,7 +426,6 @@ public class EntityPlayerActionPack {
         JUMP(true) {
             @Override
             boolean execute(Agent player, Action action) {
-                System.out.println("Jumping with action: " + action);
                 if (action.limit == 1) {
                     if (player.onGround()) player.jumpFromGround(); // onGround
                 } else {

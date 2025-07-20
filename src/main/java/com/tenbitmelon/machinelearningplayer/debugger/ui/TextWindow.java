@@ -63,6 +63,7 @@ public class TextWindow extends UIElement {
 
     public void update() {
         super.update();
+        if (!ALLOW_UPDATES) return;
 
         if (!dirty) return;
         dirty = false;

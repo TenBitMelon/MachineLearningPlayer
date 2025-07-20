@@ -9,10 +9,12 @@ import org.bytedeco.pytorch.kNone;
 public class Bernoulli {
 
     private final Tensor logits;
+    private final Tensor probs;
     private final long[] batchShape;
 
     public Bernoulli(Tensor logits) {
         this.logits = logits;
+        this.probs = torch.sigmoid(logits);
         this.batchShape = logits.shape();
     }
 
@@ -22,7 +24,7 @@ public class Bernoulli {
     //         return torch.bernoulli(self.probs.expand(shape))
 
     public Tensor sample() {
-        Tensor expandedProbs = logits.expand(batchShape);
+        Tensor expandedProbs = probs.expand(batchShape);
         return torch.bernoulli(expandedProbs);
     }
 
@@ -35,7 +37,7 @@ public class Bernoulli {
     public Tensor logProb(Tensor value) {
         BCEWithLogitsLossOptions bceWithLogitsLossOptions = new BCEWithLogitsLossOptions();
         bceWithLogitsLossOptions.reduction().put(new kNone());
-        return torch.binary_cross_entropy_with_logits(logits, value, bceWithLogitsLossOptions);
+        return torch.binary_cross_entropy_with_logits(probs, value, bceWithLogitsLossOptions);
     }
 
     // def entropy(self):
@@ -45,6 +47,6 @@ public class Bernoulli {
     public Tensor entropy() {
         BCEWithLogitsLossOptions bceWithLogitsLossOptions = new BCEWithLogitsLossOptions();
         bceWithLogitsLossOptions.reduction().put(new kNone());
-        return torch.binary_cross_entropy_with_logits(logits, torch.sigmoid(logits), bceWithLogitsLossOptions);
+        return torch.binary_cross_entropy_with_logits(logits, probs, bceWithLogitsLossOptions);
     }
 }

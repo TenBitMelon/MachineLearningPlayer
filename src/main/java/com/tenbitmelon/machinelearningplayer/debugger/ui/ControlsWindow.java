@@ -63,6 +63,7 @@ public class ControlsWindow extends UIElement {
     }
 
     public void refresh() {
+        if (!ALLOW_UPDATES) return;
         int longestLine = 0;
         int longestValue = 0;
         for (Control control : controls) {
@@ -86,6 +87,7 @@ public class ControlsWindow extends UIElement {
 
     public void update() {
         super.update();
+        if (!ALLOW_UPDATES) return;
 
         if (!dirty) return;
         dirty = false;

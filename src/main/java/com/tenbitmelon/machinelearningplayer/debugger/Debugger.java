@@ -5,6 +5,7 @@ import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import com.tenbitmelon.machinelearningplayer.util.Utils;
 import net.kyori.adventure.text.Component;
@@ -33,6 +34,7 @@ public class Debugger {
         mainDebugWindow.addText("ML Player Debugger");
         mainDebugWindow.addText("Author: TenBitMelon");
         mainDebugWindow.addText(" ");
+        mainDebugWindow.addControl(new VariableControl(Component.text("Allow Updates"), () -> UIElement.ALLOW_UPDATES));
         mainDebugWindow.setPosition(new Vector3d(16, 3, 16));
         addElement(mainDebugWindow);
     }
