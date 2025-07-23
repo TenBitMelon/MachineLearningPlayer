@@ -16,32 +16,67 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bytedeco.javacpp.Loader;
+import org.bytedeco.pytorch.Device;
+import org.bytedeco.pytorch.global.torch;
+import org.bytedeco.pytorch.presets.torch_cuda;
 import org.slf4j.event.Level;
+
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.net.URL;
 
 @SuppressWarnings("UnstableApiUsage")
 public final class MachineLearningPlayer extends JavaPlugin implements Listener {
 
     public static Logger LOGGER = null;
 
+    static {
+        Loader.load(org.bytedeco.javacpp.presets.javacpp.class);
+        Loader.load(org.bytedeco.openblas.presets.openblas.class);
+        Loader.load(org.bytedeco.pytorch.presets.torch.class);
+        // Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
+    }
+
     @Override
     public void onEnable() {
         System.setProperty("org.bytedeco.openblas.load", "mkl");
+        // loadExternalDependencies();
+
+
         // System.setProperty("org.bytedeco.javacpp.logger.debug", "true");
+        // System.setProperty("org.bukkit.plugin.java.LibraryLoader.centralURL", "https://oss.sonatype.org/content/groups/public/");
         // System.load("C:/Users/Aidan/.javacpp/cache/MachineLearningPlayer-1.0.0-SNAPSHOT.jar/org/bytedeco/pytorch/windows-x86_64/jnitorch.dll");
         // Loader.load(org.bytedeco.javacpp.presets.javacpp.class);
+        // Loader.load(org.bytedeco.openblas.presets.openblas.class);
+        // Loader.load(org.bytedeco.pytorch.presets.torch.class);
+        // Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
         // Loader.load(torch.class);
 
+
         // try {
-        //     Loader.load(torch.class);
+        //     Loader.load(org.bytedeco.pytorch.presets.torch.class);
         // } catch (UnsatisfiedLinkError e) {
         //     String path = null;
         //     try {
-        //         path = Loader.cacheResource(torch.class, "windows-x86_64/jnitorch.dll").getPath();
+        //         path = Loader.cacheResource(org.bytedeco.pytorch.presets.torch.class, "windows-x86_64/jnitorch.dll").getPath();
         //         new ProcessBuilder("C:/Users/Aidan/Downloads/Dependencies_x64_Release/DependenciesGui.exe", path).start().waitFor();
         //     } catch (InterruptedException | IOException ex) {
         //         throw new RuntimeException(ex);
         //     }
         // }
+        // Device device = args.cuda ? torch.device(torch.kCUDA) : torch.device(torch.kCPU);
+        // System.out.println("torch.cuda_is_available() = " + org.bytedeco.pytorch.global.torch.cuda_is_available());
+        // System.out.println("torch.cuda_device_count() = " + org.bytedeco.pytorch.global.torch.cuda_device_count());
+        // System.out.println("torch.hasCUDA() = " + torch.hasCUDA());
+        //
+        // Device device = new Device("cuda:0");
+        // System.out.println("device = " + device);
+        // System.out.println("device = " + device.is_cuda());
+        // System.out.println("device = " + device.is_cpu());
+        // System.out.println("device = " + device.type().toString());
+
 
         LOGGER = new Logger();
         LOGGER.setEnabled(Level.DEBUG, false);
@@ -99,6 +134,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
                 Debugger.update();
             }
         }.runTaskTimer(this, 0, 1);
+
 
         // Net net = new Net();
         //
@@ -170,4 +206,55 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
     //         return x;
     //     }
     // }
+
+    private void loadExternalDependencies() {
+        File libDir = new File(getDataFolder().getParentFile(), "lib");
+        if (!libDir.exists()) {
+            getLogger().warning("Lib directory doesn't exist: " + libDir.getAbsolutePath());
+            return;
+        }
+
+        File[] jarFiles = libDir.listFiles((dir, name) -> name.endsWith(".jar"));
+        if (jarFiles == null || jarFiles.length == 0) {
+            getLogger().warning("No JAR files found in lib directory");
+            return;
+        }
+
+        try {
+            // Get the plugin's classloader
+            ClassLoader pluginClassLoader = this.getClass().getClassLoader();
+
+            // Use reflection to access the addURL method
+            Method addURL = null;
+            Class<?> currentClass = pluginClassLoader.getClass();
+
+            // Walk up the class hierarchy to find URLClassLoader
+            while (currentClass != null && addURL == null) {
+                try {
+                    addURL = currentClass.getDeclaredMethod("addURL", URL.class);
+                } catch (NoSuchMethodException e) {
+                    currentClass = currentClass.getSuperclass();
+                }
+            }
+
+            if (addURL != null) {
+                addURL.setAccessible(true);
+
+                for (File jar : jarFiles) {
+                    try {
+                        addURL.invoke(pluginClassLoader, jar.toURI().toURL());
+                        getLogger().info("Loaded dependency: " + jar.getName());
+                    } catch (Exception e) {
+                        getLogger().warning("Failed to load " + jar.getName() + ": " + e.getMessage());
+                    }
+                }
+            } else {
+                getLogger().warning("Could not find addURL method in classloader hierarchy");
+            }
+
+        } catch (Exception e) {
+            getLogger().severe("Failed to load external dependencies: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 }

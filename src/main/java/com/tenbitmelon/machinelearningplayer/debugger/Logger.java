@@ -2,6 +2,7 @@ package com.tenbitmelon.machinelearningplayer.debugger;
 
 import org.slf4j.event.Level;
 
+import java.util.Arrays;
 import java.util.HashMap;
 
 public class Logger {
@@ -16,50 +17,47 @@ public class Logger {
         enabledLevels.put(Level.ERROR, true);
     }
 
-    public void log(Level level, String message) {
+    private static String format(String template, Object... args) {
+        for (Object arg : args) {
+            String value = "";
+            if (arg == null) {
+                value = "null";
+            } else if (arg.getClass().isArray()) {
+                value = Arrays.deepToString(new Object[]{arg});
+                value = value.substring(1, value.length() - 1); // Remove brackets
+            } else {
+                value = arg.toString();
+            }
+            template = template.replaceFirst("\\{}", value);
+        }
+        return template;
+    }
+
+    private void log(Level level, String message, Object... args) {
         if (enabledLevels.getOrDefault(level, false)) {
-            System.out.println("[" + level.name() + "] " + message);
+            System.out.printf("[%s] %s%n", level.name(), format(message, args));
         }
     }
 
-    public void debug(String message) {
-        log(Level.DEBUG, message);
-    }
-
     public void debug(String message, Object... args) {
-        log(Level.DEBUG, String.format(message, args));
-    }
-
-    public void info(String message) {
-        log(Level.INFO, message);
+        log(Level.DEBUG, message, args);
     }
 
     public void info(String message, Object... args) {
-        log(Level.INFO, String.format(message, args));
-    }
-
-    public void warn(String message) {
-        log(Level.WARN, message);
+        log(Level.INFO, message, args);
     }
 
     public void warn(String message, Object... args) {
-        log(Level.WARN, String.format(message, args));
-    }
-
-    public void error(String message) {
-        log(Level.ERROR, message);
+        log(Level.WARN, message, args);
     }
 
     public void error(String message, Object... args) {
-        log(Level.ERROR, String.format(message, args));
+        log(Level.ERROR, message, args);
     }
 
-    public void trace(String message) {
-        log(Level.TRACE, message);
-    }
 
     public void trace(String message, Object... args) {
-        log(Level.TRACE, String.format(message, args));
+        log(Level.TRACE, message, args);
     }
 
     public boolean isEnabled(Level level) {

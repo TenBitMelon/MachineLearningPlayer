@@ -11,6 +11,8 @@ import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
 
+import static com.tenbitmelon.machinelearningplayer.models.TrainingManager.device;
+
 public class MinecraftRL extends Module {
 
     public final long otherFeaturesDim = 128;
@@ -383,7 +385,7 @@ public class MinecraftRL extends Module {
             // // LOGGER.debug("LSTM loop [{}]: h shape {}, d shape {}", i, h.shape(), d.shape());
 
             // Hidden state
-            Tensor oneMinusD = Tensor.create(1.0).sub(d).view(1, -1, 1);
+            Tensor oneMinusD = Tensor.create(1.0).cuda().sub(d).view(1, -1, 1);
             Tensor hState = oneMinusD.mul(lstmState.hiddenState).toType(torch.ScalarType.Float);
             // Cell state
             Tensor cState = oneMinusD.mul(lstmState.cellState).toType(torch.ScalarType.Float);

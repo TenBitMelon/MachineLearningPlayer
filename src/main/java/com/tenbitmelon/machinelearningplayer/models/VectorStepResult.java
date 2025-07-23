@@ -3,6 +3,7 @@ package com.tenbitmelon.machinelearningplayer.models;
 import com.tenbitmelon.machinelearningplayer.environment.Info;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import org.bytedeco.pytorch.Tensor;
+import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
 public record VectorStepResult(Observation[] observations, double[] rewards, boolean[] terminated,
@@ -17,12 +18,21 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
     }
 
     public Tensor observationsTensor() {
-        Tensor nextObs = torch.zeros(observations.length, Observation.OBSERVATION_SPACE_SIZE);
-        for (int i = 0; i < observations.length; i++) {
-            Observation observation = observations[i];
+        // Tensor nextObs = torch.zeros(observations.length, Observation.OBSERVATION_SPACE_SIZE);
+        // for (int i = 0; i < observations.length; i++) {
+        //     Observation observation = observations[i];
+        //     Tensor tensor = observation.toTensor();
+        //     nextObs.get(i).put(tensor);
+        // }
+        // return nextObs;
+
+
+        TensorVector tensorVector = new TensorVector();
+        for (Observation observation : observations) {
             Tensor tensor = observation.toTensor();
-            nextObs.get(i).put(tensor);
+            tensorVector.push_back(tensor);
         }
-        return nextObs;
+        return torch.stack(tensorVector, 0);  // Stack along batch dimension
+
     }
 }

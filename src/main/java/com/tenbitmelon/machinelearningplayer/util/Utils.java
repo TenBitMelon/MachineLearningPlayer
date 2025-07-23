@@ -297,6 +297,20 @@ public class Utils {
         sb.append(indentStr).append("]");
     }
 
+    // def szudzik_unpairing(index: Index0):
+    // shell = floor(sqrt(index))
+    //     if index - shell ^ 2 < shell:
+    //     return [shell, index - shell ^ 2]
+    //     else:
+    //     return [index - shell ^ 2 - shell, shell]
 
+    public static int[] szudzikUnpairing(int index) {
+        int shell = (int) Math.floor(Math.sqrt(index));
+        if (index - shell * shell < shell) {
+            return new int[]{shell, index - shell * shell};
+        } else {
+            return new int[]{index - shell * shell - shell, shell};
+        }
+    }
 }
 

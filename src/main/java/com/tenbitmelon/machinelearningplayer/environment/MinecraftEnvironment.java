@@ -16,6 +16,8 @@ import org.bytedeco.pytorch.TensorIndexVector;
 
 import java.util.concurrent.CompletableFuture;
 
+import static com.tenbitmelon.machinelearningplayer.util.Utils.szudzikUnpairing;
+
 public class MinecraftEnvironment {
 
     public static final int GRID_SIZE_XZ = 5;
@@ -36,12 +38,14 @@ public class MinecraftEnvironment {
     public MinecraftEnvironment(ExperimentConfig args) {
         this.args = args;
         // LOGGER.debug("Initializing Minecraft environment");
-        int w = (int) Math.floor((Math.sqrt(8 * nextEnvironmentId + 1) - 1) / 2);
-        int t = (w * w + w) / 2;
+        // int w = (int) Math.floor((Math.sqrt(8 * nextEnvironmentId + 1) - 1) / 2);
+        // int t = (w * w + w) / 2;
+        // roomLocation = new Location(world, (w - (nextEnvironmentId - t)) * 16, 0, (nextEnvironmentId - t) * 16);
 
         World world = Bukkit.getWorlds().getFirst();
 
-        roomLocation = new Location(world, (w - (nextEnvironmentId - t)) * 16, 0, (nextEnvironmentId - t) * 16);
+        int[] coords = szudzikUnpairing(nextEnvironmentId);
+        roomLocation = new Location(world, coords[0] * 16, 0, coords[1] * 16);
         Chunk chunk = roomLocation.getChunk();
         chunk.load();
 
@@ -110,9 +114,9 @@ public class MinecraftEnvironment {
         World world = roomLocation.getWorld();
 
         // Debug counters
-        int solidBlockCount = 0;
-        int totalBlocksChecked = 0;
-        int blocksInBounds = 0;
+        // int solidBlockCount = 0;
+        // int totalBlocksChecked = 0;
+        // int blocksInBounds = 0;
 
         // LOGGER.debug("Agent position: {}", position);
         // LOGGER.debug("Bounding box: {}", boundingBox.toString()); // Add toString() to your bounding box class
@@ -121,14 +125,14 @@ public class MinecraftEnvironment {
         for (int x = -GRID_SIZE_XZ / 2; x < GRID_SIZE_XZ / 2; x++) {
             for (int z = -GRID_SIZE_XZ / 2; z < GRID_SIZE_XZ / 2; z++) {
                 for (int y = -GRID_SIZE_Y / 2; y < GRID_SIZE_Y / 2; y++) {
-                    totalBlocksChecked++;
+                    // totalBlocksChecked++;
                     int blockX = (int) Math.floor(position.x() + x);
                     int blockY = (int) Math.floor(position.y() + y);
                     int blockZ = (int) Math.floor(position.z() + z);
 
                     if (!boundingBox.contains(blockX, blockY, blockZ))
                         continue;
-                    blocksInBounds++;
+                    // blocksInBounds++;
 
                     Material blockType = world.getBlockAt(blockX, blockY, blockZ).getType();
 
@@ -144,7 +148,7 @@ public class MinecraftEnvironment {
                         y;
 
                     if (blockType.isSolid()) {
-                        solidBlockCount++;
+                        // solidBlockCount++;
                         voxelGrid.index_put_(
                             new TensorIndexVector(new TensorIndex(index)),
                             new Scalar(1)
@@ -367,14 +371,14 @@ public class MinecraftEnvironment {
         double reward = (this.previousDistanceToGoal - info.distanceToGoal()) * 10.0; // Reward based on distance to goal
         previousDistanceToGoal = info.distanceToGoal();
 
-        reward -= 0.5; // Small penalty for each step taken
+        reward -= 0.05; // Small penalty for each step taken
 
         // LOGGER.debug("Current step: {}, Reward: {}", this.currentStep, reward);
 
         boolean terminated = false;
         if (info.distanceToGoal() < GOAL_THRESHOLD) {
             // LOGGER.debug("Goal reached! Distance to goal: {}", info.distanceToGoal());
-            reward += 200.0; // Large reward for reaching the goal
+            reward += 100.0;
             terminated = true;
         }
 

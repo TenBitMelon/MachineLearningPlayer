@@ -33,6 +33,13 @@ public class Observation {
         this.data = torch.zeros(OBSERVATION_SPACE_SIZE);
     }
 
+    public Observation(Tensor data) {
+        if (data.size(0) != OBSERVATION_SPACE_SIZE) {
+            throw new IllegalArgumentException("Observation tensor must have size " + OBSERVATION_SPACE_SIZE);
+        }
+        this.data = data;
+    }
+
     /**
      * Voxel Grid:
      * - Shape: (GRID_SIZE_XZ, GRID_SIZE_XZ, GRID_SIZE_Y)

@@ -2,6 +2,8 @@ package com.tenbitmelon.machinelearningplayer.debugger;
 
 import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import com.tenbitmelon.machinelearningplayer.util.Utils;
 import net.kyori.adventure.text.Component;
@@ -12,10 +14,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.joml.Vector3d;
+import org.slf4j.event.Level;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
+
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 public class Debugger {
 
@@ -30,7 +35,16 @@ public class Debugger {
         mainDebugWindow.addText("ML Player Debugger");
         mainDebugWindow.addText("Author: TenBitMelon");
         mainDebugWindow.addText(" ");
+        mainDebugWindow.addControl(new ButtonControl(Component.text("Start New Spark"), () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "spark profiler stop")));
+        mainDebugWindow.addText(" ");
         mainDebugWindow.addControl(new VariableControl(Component.text("Allow Updates"), () -> UIElement.ALLOW_UPDATES));
+        mainDebugWindow.addText(" ");
+        mainDebugWindow.addControl(new BooleanControl(Component.text("Log Debug"), () -> LOGGER.isEnabled(Level.DEBUG), (value) -> LOGGER.setEnabled(Level.DEBUG, value)));
+        mainDebugWindow.addControl(new BooleanControl(Component.text("Log Info"), () -> LOGGER.isEnabled(Level.INFO), (value) -> LOGGER.setEnabled(Level.INFO, value)));
+        mainDebugWindow.addControl(new BooleanControl(Component.text("Log Warn"), () -> LOGGER.isEnabled(Level.WARN), (value) -> LOGGER.setEnabled(Level.WARN, value)));
+        mainDebugWindow.addControl(new BooleanControl(Component.text("Log Error"), () -> LOGGER.isEnabled(Level.ERROR), (value) -> LOGGER.setEnabled(Level.ERROR, value)));
+        mainDebugWindow.addControl(new BooleanControl(Component.text("Log Trace"), () -> LOGGER.isEnabled(Level.TRACE), (value) -> LOGGER.setEnabled(Level.TRACE, value)));
+
         mainDebugWindow.setPosition(new Vector3d(16, 3, 16));
         addElement(mainDebugWindow);
     }
@@ -57,6 +71,7 @@ public class Debugger {
         for (UIElement element : elements) {
             element.update();
         }
+        Debugger.mainDebugWindow.refresh();
     }
 
     public static class DebugListener implements Listener {

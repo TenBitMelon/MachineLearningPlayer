@@ -10,11 +10,11 @@ public class ExperimentConfig {
     /**
      * The learning rate of the optimizer.
      */
-    public final float learningRate = 2.5e-4f; // Note the 'f' suffix for float literals
+    public final float learningRate = 3e-4f;
     /**
      * The number of parallel game environments.
      */
-    public final int numEnvs = 8;
+    public final int numEnvs = 32;
     /**
      * Toggle learning rate annealing for policy and value networks.
      */
@@ -28,24 +28,18 @@ public class ExperimentConfig {
      */
     public final float gaeLambda = 0.95f;
     /**
-     * The number of mini-batches.
+     * The number of mini-batches. 4
      */
-    public final int numMinibatches = 4;
-
-    // Algorithm specific arguments
+    public final int numMinibatches = 8;
     /**
      * The K epochs to update the policy.
      */
     public final int updateEpochs = 4;
     /**
-     * Total timesteps of the experiments.
-     */
-    // public int totalTimesteps = 5;
-    // public int totalTimesteps = 10_000_000;
-    /**
      * Toggles advantages normalization.
      */
     public final boolean normAdv = true;
+    // public final float learningRate = 2.5e-4f; // Note the 'f' suffix for float literals
     /**
      * The surrogate clipping coefficient.
      */
@@ -66,10 +60,17 @@ public class ExperimentConfig {
      * The maximum norm for the gradient clipping.
      */
     public final float maxGradNorm = 0.5f;
+
+    // Algorithm specific arguments
     /**
      * The target KL divergence threshold. Can be null if not used.
      */
     public final Float targetKl = null; // Use wrapper class Float to allow null
+    /**
+     * Total timesteps of the experiments.
+     */
+    // public int totalTimesteps = 5;
+    // public int totalTimesteps = 10_000_000;
     /**
      * The name of this experiment.
      * In Python, this was derived from the filename. In Java, we might use the class name
@@ -105,7 +106,6 @@ public class ExperimentConfig {
      * Whether to capture videos of the agent performances (check out `videos` folder).
      */
     public boolean captureVideo = false;
-
     // to be filled in runtime
     /**
      * The number of steps to run in each environment per policy rollout.
@@ -116,18 +116,18 @@ public class ExperimentConfig {
      * The batch size (computed in runtime, e.g., numEnvs * numSteps).
      * Initialized to 0 or a sensible default, will be calculated later.
      */
-    public int batchSize = 0;
+    public int batchSize = numEnvs * numSteps;
     /**
      * The mini-batch size (computed in runtime, e.g., batchSize / numMinibatches).
      * Initialized to 0 or a sensible default, will be calculated later.
      */
-    public int minibatchSize = 0;
+    public int minibatchSize = batchSize / numMinibatches;
     /**
      * The number of iterations (computed in runtime, e.g., totalTimesteps / batchSize).
      * Initialized to 0 or a sensible default, will be calculated later.
      */
     // public int numIterations = 0;
-    public int numIterations = 5;
+    public int numIterations = 5000;
 
     private ExperimentConfig() {
         // Default constructor, can be used to initialize with default values
@@ -135,9 +135,9 @@ public class ExperimentConfig {
         // args.minibatch_size = int(args.batch_size // args.num_minibatches)
         // args.num_iterations = args.total_timesteps // args.batch_size
 
-        batchSize = numEnvs * numSteps;
+        // batchSize = numEnvs * numSteps;
         System.out.println("Batch size: " + batchSize);
-        minibatchSize = batchSize / numMinibatches;
+        // minibatchSize = batchSize / numMinibatches;
         System.out.println("Minibatch size: " + minibatchSize);
         // numIterations = totalTimesteps / batchSize;
         System.out.println("Number of iterations: " + numIterations);
