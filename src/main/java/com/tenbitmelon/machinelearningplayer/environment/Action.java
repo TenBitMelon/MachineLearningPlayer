@@ -1,6 +1,7 @@
 package com.tenbitmelon.machinelearningplayer.environment;
 
 import net.minecraft.world.phys.Vec2;
+import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.pytorch.Tensor;
 
 public class Action {
@@ -25,9 +26,13 @@ public class Action {
     public static final int ACTION_SPACE_SIZE = OFFSET_MOVE_KEYS + SIZE_MOVE_KEYS;
 
     final Tensor data;
+    private FloatPointer cachedData;
 
     public Action(Tensor data) {
         this.data = data;
+        this.cachedData = data
+            .cpu()
+            .data_ptr_float();
     }
 
     /**
@@ -36,7 +41,8 @@ public class Action {
      */
     public int jumping() {
         // return data.narrow(1, OFFSET_JUMPING, SIZE_JUMPING);
-        return data.get(OFFSET_JUMPING).item_int();
+        // return data.get(OFFSET_JUMPING).item_int();
+        return (int) cachedData.get(OFFSET_JUMPING);
     }
 
     /**
@@ -45,7 +51,8 @@ public class Action {
      */
     public int sprinting() {
         // return data.narrow(1, OFFSET_SPRINTING, SIZE_SPRINTING);
-        return data.get(OFFSET_SPRINTING).item_int();
+        // return data.get(OFFSET_SPRINTING).item_int();
+        return (int) cachedData.get(OFFSET_SPRINTING);
     }
 
     /**
@@ -54,7 +61,8 @@ public class Action {
      */
     public int sneaking() {
         // return data.narrow(1, OFFSET_SNEAKING, SIZE_SNEAKING);
-        return data.get(OFFSET_SNEAKING).item_int();
+        // return data.get(OFFSET_SNEAKING).item_int();
+        return (int) cachedData.get(OFFSET_SNEAKING);
     }
 
     /**
@@ -63,9 +71,13 @@ public class Action {
      */
     public Vec2 lookChange() {
         // return data.narrow(1, OFFSET_LOOK_CHANGE, SIZE_LOOK_CHANGE);
+        // return new Vec2(
+        //     (float) data.get(OFFSET_LOOK_CHANGE).item_double(),
+        //     (float) data.get(OFFSET_LOOK_CHANGE + 1).item_double()
+        // );
         return new Vec2(
-            (float) data.get(OFFSET_LOOK_CHANGE).item_double(),
-            (float) data.get(OFFSET_LOOK_CHANGE + 1).item_double()
+            (float) cachedData.get(OFFSET_LOOK_CHANGE),
+            (float) cachedData.get(OFFSET_LOOK_CHANGE + 1)
         );
     }
 
@@ -75,11 +87,17 @@ public class Action {
      */
     public MovementKeys moveKeys() {
         // return data.narrow(1, OFFSET_MOVE_KEYS, SIZE_MOVE_KEYS);
+        // return new MovementKeys(
+        //     data.get(OFFSET_MOVE_KEYS).item_int(),
+        //     data.get(OFFSET_MOVE_KEYS + 1).item_int(),
+        //     data.get(OFFSET_MOVE_KEYS + 2).item_int(),
+        //     data.get(OFFSET_MOVE_KEYS + 3).item_int()
+        // );
         return new MovementKeys(
-            data.get(OFFSET_MOVE_KEYS).item_int(),
-            data.get(OFFSET_MOVE_KEYS + 1).item_int(),
-            data.get(OFFSET_MOVE_KEYS + 2).item_int(),
-            data.get(OFFSET_MOVE_KEYS + 3).item_int()
+            (int) cachedData.get(OFFSET_MOVE_KEYS),
+            (int) cachedData.get(OFFSET_MOVE_KEYS + 1),
+            (int) cachedData.get(OFFSET_MOVE_KEYS + 2),
+            (int) cachedData.get(OFFSET_MOVE_KEYS + 3)
         );
     }
 

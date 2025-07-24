@@ -291,6 +291,7 @@ public class MinecraftRL extends Module {
         return layer;
     }
 
+    // Tensor observation is [B, OBSERVATION_SPACE_SIZE]
     public States getStates(Tensor observation, LSTMState lstmState, Tensor done) {
         // LOGGER.debug("--- Entering getStates ---");
         // LOGGER.debug("Initial observation shape: {}", observation.shape());
@@ -371,36 +372,29 @@ public class MinecraftRL extends Module {
 
         // // LOGGER.debug("Shared features shape: {}", sharedFeatures.shape());
 
-        long batchSize = lstmState.hiddenState.size(1);
-        Tensor hidden = sharedFeatures.reshape(-1, batchSize, this.lstm.options().input_size().get());
-        done = done.reshape(-1, batchSize);
+        long batchSize = lstmState.hiddenState.size(1); // batchSizee\
+        Tensor hidden = sharedFeatures.reshape(-1, batchSize, this.lstm.options().input_size().get()); // size (B, batchSize, input_size)
+        done = done.reshape(-1, batchSize); // size (B, batchSize)
 
-        // LOGGER.debug("Reshaped hidden for LSTM input shape: {}", hidden.shape());
-        // LOGGER.debug("Reshaped done for LSTM loop shape: {}", done.shape());
-
+        Tensor ones = torch.ones_like(done.get(0)).cuda();
         TensorVector newHidden = new TensorVector();
+
         for (int i = 0; i < hidden.size(0); i++) {
             Tensor h = hidden.get(i);
             Tensor d = done.get(i);
-            // // LOGGER.debug("LSTM loop [{}]: h shape {}, d shape {}", i, h.shape(), d.shape());
 
-            // Hidden state
-            Tensor oneMinusD = Tensor.create(1.0).cuda().sub(d).view(1, -1, 1);
-            Tensor hState = oneMinusD.mul(lstmState.hiddenState).toType(torch.ScalarType.Float);
-            // Cell state
-            Tensor cState = oneMinusD.mul(lstmState.cellState).toType(torch.ScalarType.Float);
-            // // LOGGER.debug("LSTM loop [{}]: reset hState shape {}, cState shape {}", i, hState.shape(), cState.shape());
+            Tensor oneMinusD = ones.sub(d).view(1, -1, 1);
 
-            T_TensorTensor_T tTensorTensorT = new T_TensorTensor_T(hState, cState);
+            Tensor hiddenState = oneMinusD.mul(lstmState.hiddenState); // Hidden state size (1, batchSize, hidden_size)
+            Tensor cellState = oneMinusD.mul(lstmState.cellState); // Cell state size (1, batchSize, hidden_size)
 
+            T_TensorTensor_T tTensorTensorT = new T_TensorTensor_T(hiddenState, cellState);
             T_TensorT_TensorTensor_T_T hNew_LSTMState = this.lstm.forward(h.unsqueeze(0), tTensorTensorT);
+
             newHidden.push_back(hNew_LSTMState.get0());
             lstmState = new LSTMState(hNew_LSTMState.get1().get0(), hNew_LSTMState.get1().get1());
-            // // LOGGER.debug("LSTM loop [{}]: new hidden from LSTM shape {}", i, hNew_LSTMState.get0().shape());
         }
         Tensor newHiddenTensor = torch.flatten(torch.cat(newHidden), 0, 1);
-        // LOGGER.debug("Final newHiddenTensor shape (after flatten): {}", newHiddenTensor.shape());
-        // LOGGER.debug("--- Exiting getStates ---");
 
         /*
         return new_hidden, lstm_state
@@ -409,6 +403,14 @@ public class MinecraftRL extends Module {
         return new States(newHiddenTensor, lstmState);
     }
 
+    /**
+     * Get the value from the critic head.
+     *
+     * @param observation Shape: (numEnvs, OBSERVATION_SPACE_SIZE)
+     * @param lstmState   LSTM state containing hidden and cell states.
+     * @param done        Shape: (numEnvs, 1) - 1 if done, 0 otherwise.
+     * @return Shape (numEnvs, 1) - the value for each environment.
+     */
     public Tensor getValue(Tensor observation, LSTMState lstmState, Tensor done) {
         /*
         hidden, _ = self.get_states(x, lstm_state, done)
@@ -630,6 +632,18 @@ public class MinecraftRL extends Module {
         return this.lstm.options().num_layers().get();
     }
 
+    public void saveCheckpoint(int iteration) {
+        OutputArchive outputArchive = new OutputArchive();
+        this.save(outputArchive);
+        outputArchive.save_to("minecraft_rl_checkpoint_" + iteration + ".pt");
+    }
+
+    /**
+     * Holds the state of an LSTM layer.
+     *
+     * @param hiddenState Shape (numEnvs, batchSize, hiddenSize)
+     * @param cellState   Shape (numEnvs, batchSize, hiddenSize)
+     */
     public record LSTMState(Tensor hiddenState, Tensor cellState) {
         @Override
         protected LSTMState clone() {

@@ -205,6 +205,8 @@ public class Utils {
         put('þ', 3);
         put('←', 8);
         put('→', 8);
+        put('↞', 5);
+        put('↠', 5);
     }};
 
     public static int characterWidth(char c) {

@@ -16,30 +16,51 @@ import java.util.ArrayList;
 public class TextWindow extends UIElement {
 
     final ArrayList<Component> lines = new ArrayList<>();
-    final TextDisplay display = new TextDisplayBuilder(Debugger.WORLD).billboard(Display.Billboard.FIXED).alignment(TextDisplay.TextAlignment.LEFT).lineWidth(2000).teleportDuration(1).build();
+    final TextDisplay display;
+    int maxLines = 0;
 
-    public TextWindow() {}
+    public TextWindow() {
+        this(Display.Billboard.FIXED, TextDisplay.TextAlignment.CENTER);
+    }
 
-    public TextWindow(Entity anchor) {
-        super(anchor);
+    public TextWindow(Display.Billboard billboard, TextDisplay.TextAlignment alignment) {
+        display = new TextDisplayBuilder(Debugger.WORLD)
+            .billboard(billboard)
+            .alignment(alignment)
+            .lineWidth(2000)
+            .teleportDuration(1)
+            .build();
     }
 
     public void addLine(String line) {
-        lines.add(Component.text(line));
-        dirty = true;
+        addLine(Component.text(line));
     }
 
     public void addLine(Component line) {
+        if (maxLines != 0 && lines.size() >= maxLines) {
+            lines.removeFirst();
+        }
         lines.add(line);
         dirty = true;
     }
 
-    public void setLine(int index, String line) {
-        if (index < 0 || index >= lines.size()) {
-            throw new IndexOutOfBoundsException("Index: " + index + ", Size: " + lines.size());
-        }
-        lines.set(index, Component.text(line));
+    public void clearLines() {
+        lines.clear();
         dirty = true;
+    }
+
+    public void setMaxLines(int maxLines) {
+        this.maxLines = maxLines;
+        if (maxLines > 0) {
+            while (lines.size() > maxLines) {
+                lines.removeLast();
+            }
+        }
+        dirty = true;
+    }
+
+    public void setLine(int index, String line) {
+        setLine(index, Component.text(line));
     }
 
     public void setLine(int index, Component line) {

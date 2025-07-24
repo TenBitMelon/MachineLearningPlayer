@@ -8,6 +8,8 @@ import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Display;
 import org.bukkit.util.Transformation;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 public class BlockDisplayBuilder {
 
@@ -86,6 +88,49 @@ public class BlockDisplayBuilder {
         blockDisplay.setBrightness(brightness);
         return this;
     }
+
+    public BlockDisplayBuilder setTranslation(float x, float y, float z) {
+        Transformation current = blockDisplay.getTransformation();
+        Transformation updated = new Transformation(
+            new Vector3f(x, y, z),
+            current.getLeftRotation(),
+            current.getScale(),
+            current.getRightRotation()
+        );
+        blockDisplay.setTransformation(updated);
+        return this;
+    }
+
+    public BlockDisplayBuilder setScale(float x, float y, float z) {
+        Transformation current = blockDisplay.getTransformation();
+        Transformation updated = new Transformation(
+            current.getTranslation(),
+            current.getLeftRotation(),
+            new Vector3f(x, y, z),
+            current.getRightRotation()
+        );
+        blockDisplay.setTransformation(updated);
+        return this;
+    }
+
+    public BlockDisplayBuilder setRotation(Quaternionf leftRotation, Quaternionf rightRotation) {
+        Transformation current = blockDisplay.getTransformation();
+        Transformation updated = new Transformation(
+            current.getTranslation(),
+            leftRotation,
+            current.getScale(),
+            rightRotation
+        );
+        blockDisplay.setTransformation(updated);
+        return this;
+    }
+
+    // Teleportation
+    public BlockDisplayBuilder teleport(Location location) {
+        blockDisplay.teleport(location);
+        return this;
+    }
+
 
     public BlockDisplay build() {
         return blockDisplay;

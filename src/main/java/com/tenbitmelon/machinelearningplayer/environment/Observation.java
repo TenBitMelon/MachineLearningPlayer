@@ -122,4 +122,8 @@ public class Observation {
     public Tensor toTensor() {
         return data;
     }
+
+    public Tensor nonVoxelGridData() {
+        return data.narrow(0, OFFSET_POSITION_IN_BLOCK, OBSERVATION_SPACE_SIZE - OFFSET_POSITION_IN_BLOCK);
+    }
 }

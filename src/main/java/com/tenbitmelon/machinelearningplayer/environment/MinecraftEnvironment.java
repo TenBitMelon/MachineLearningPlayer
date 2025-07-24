@@ -2,21 +2,25 @@ package com.tenbitmelon.machinelearningplayer.environment;
 
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.*;
 import org.bukkit.craftbukkit.CraftServer;
+import org.bukkit.entity.Display;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.util.BoundingBox;
-import org.bytedeco.pytorch.Scalar;
 import org.bytedeco.pytorch.Tensor;
-import org.bytedeco.pytorch.TensorIndex;
-import org.bytedeco.pytorch.TensorIndexVector;
+import org.bytedeco.pytorch.global.torch;
 
 import java.util.concurrent.CompletableFuture;
 
 import static com.tenbitmelon.machinelearningplayer.util.Utils.szudzikUnpairing;
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class MinecraftEnvironment {
 
@@ -30,10 +34,13 @@ public class MinecraftEnvironment {
     private final ExperimentConfig args;
     private final Location roomLocation;
     private final BoundingBox boundingBox;
+    TextWindow environmentLog;
     private Agent agent;
     private int currentStep = 0;
     private Vec3 goalPosition;
     private double previousDistanceToGoal;
+    private Material randomConcrete;
+    private boolean isInitialSetup = true;
 
     public MinecraftEnvironment(ExperimentConfig args) {
         this.args = args;
@@ -46,6 +53,10 @@ public class MinecraftEnvironment {
 
         int[] coords = szudzikUnpairing(nextEnvironmentId);
         roomLocation = new Location(world, coords[0] * 16, 0, coords[1] * 16);
+
+        environmentLog = new TextWindow(Display.Billboard.VERTICAL, TextDisplay.TextAlignment.LEFT);
+        environmentLog.setPosition(roomLocation.toVector().toVector3d().mul(1, 0, 1).add(5.0f, 4.0f, 5.0f));
+
         Chunk chunk = roomLocation.getChunk();
         chunk.load();
 
@@ -66,214 +77,14 @@ public class MinecraftEnvironment {
             }
         }
 
-        world.getBlockAt(startX + 8, -3, startZ + 8).setType(Material.BEACON);
-        for (int x = -1; x <= 1; x++) {
-            for (int z = -1; z <= 1; z++) {
-                world.getBlockAt(startX + 8 + x, -4, startZ + 8 + z).setType(Material.IRON_BLOCK);
-            }
-        }
-
-        world.getBlockAt(roomLocation.getBlockX() + 8, 0, roomLocation.getBlockZ() + 8).setType(Material.GOLD_BLOCK);
-
-        // world.getBlockAt(boundingBox.getMin().getBlockX(), boundingBox.getMin().getBlockY(), boundingBox.getMin().getBlockZ())
-        //     .setType(Material.GLOW_LICHEN);
-        // world.getBlockAt(boundingBox.getMax().getBlockX(), boundingBox.getMax().getBlockY(), boundingBox.getMax().getBlockZ())
-        //     .setType(Material.GLOW_LICHEN);
-
-        MinecraftServer server = ((CraftServer) Bukkit.getServer()).getServer();
-        CompletableFuture<Agent> completableFuture = Agent.spawn(server, new Location(world, startX + 8.5, 1.5, startZ + 8.5));
-        completableFuture.whenComplete((agent, throwable) -> {
-            if (throwable == null) {
-                this.agent = agent;
-            }
-        });
-
-        nextEnvironmentId++;
-    }
-
-    public static double[] getRandomPointInCircle(double minDist, double maxDist) {
-        if (minDist < 0 || maxDist <= minDist) {
-            throw new IllegalArgumentException("Invalid min/max distance");
-        }
-
-        // Uniform distribution over the annulus area
-        double angle = Math.random() * 2 * Math.PI;
-        double radius = Math.sqrt(Math.random() * (maxDist * maxDist - minDist * minDist) + minDist * minDist);
-
-        double x = radius * Math.cos(angle);
-        double y = radius * Math.sin(angle);
-        return new double[]{x, y};
-    }
-
-    public Observation getObservation() {
-        Observation observation = new Observation();
-
-        // Create voxel grid
-        Tensor voxelGrid = observation.voxelGrid();
-        Vec3 position = agent.position();
-        World world = roomLocation.getWorld();
-
-        // Debug counters
-        // int solidBlockCount = 0;
-        // int totalBlocksChecked = 0;
-        // int blocksInBounds = 0;
-
-        // LOGGER.debug("Agent position: {}", position);
-        // LOGGER.debug("Bounding box: {}", boundingBox.toString()); // Add toString() to your bounding box class
-
-        // Loop over the GRID_SIZE_XZ x GRID_SIZE_XZ x GRID_SIZE_Y grid centered at the agent's position
-        for (int x = -GRID_SIZE_XZ / 2; x < GRID_SIZE_XZ / 2; x++) {
-            for (int z = -GRID_SIZE_XZ / 2; z < GRID_SIZE_XZ / 2; z++) {
-                for (int y = -GRID_SIZE_Y / 2; y < GRID_SIZE_Y / 2; y++) {
-                    // totalBlocksChecked++;
-                    int blockX = (int) Math.floor(position.x() + x);
-                    int blockY = (int) Math.floor(position.y() + y);
-                    int blockZ = (int) Math.floor(position.z() + z);
-
-                    if (!boundingBox.contains(blockX, blockY, blockZ))
-                        continue;
-                    // blocksInBounds++;
-
-                    Material blockType = world.getBlockAt(blockX, blockY, blockZ).getType();
-
-                    // voxelData = voxelData.view(
-                    //     observation.size(0),
-                    //     MinecraftEnvironment.GRID_SIZE_XZ,
-                    //     MinecraftEnvironment.GRID_SIZE_XZ,
-                    //     MinecraftEnvironment.GRID_SIZE_Y
-                    // ).unsqueeze(1); // (B, 1, X, Z, Y)
-
-                    int index = (x + GRID_SIZE_XZ / 2) * GRID_SIZE_XZ * GRID_SIZE_Y +
-                        (z + GRID_SIZE_XZ / 2) * GRID_SIZE_Y +
-                        y;
-
-                    if (blockType.isSolid()) {
-                        // solidBlockCount++;
-                        voxelGrid.index_put_(
-                            new TensorIndexVector(new TensorIndex(index)),
-                            new Scalar(1)
-                        );
-                        // LOGGER.debug("Found solid block {} at ({},{},{}) -> index {}",
-                        //     blockType, blockX, blockY, blockZ, index);
-                    }
-                }
-            }
-        }
-
-        // LOGGER.debug("Blocks checked: {}, in bounds: {}, solid: {}",
-        //     totalBlocksChecked, blocksInBounds, solidBlockCount);
-
-        // Set position in block
-        Tensor positionInBlock = observation.positionInBlock();
-        float x = (float) (position.x() - (int) (position.x()));
-        float y = (float) (position.y() - (int) (position.y()));
-        float z = (float) (position.z() - (int) (position.z()));
-
-        // LOGGER.debug("Position in block: ({}, {}, {})", x, y, z);
-
-        positionInBlock.index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(x));
-        positionInBlock.index_put_(new TensorIndexVector(new TensorIndex(1)), new Scalar(y));
-        positionInBlock.index_put_(new TensorIndexVector(new TensorIndex(2)), new Scalar(z));
-
-        // Set velocity
-        Tensor velocity = observation.velocity();
-        Vec3 agentVelocity = agent.getDeltaMovement();
-        // LOGGER.debug("Agent velocity: ({}, {}, {})", agentVelocity.x(), agentVelocity.y(), agentVelocity.z());
-        velocity.index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(agentVelocity.x()));
-        velocity.index_put_(new TensorIndexVector(new TensorIndex(1)), new Scalar(agentVelocity.y()));
-        velocity.index_put_(new TensorIndexVector(new TensorIndex(2)), new Scalar(agentVelocity.z()));
-
-        // Set look direction
-        Tensor lookDirection = observation.lookDirection();
-        Vec3 lookDirectionVec = agent.getLookAngle();
-        // LOGGER.debug("Agent look direction: ({}, {}, {})", lookDirectionVec.x(), lookDirectionVec.y(), lookDirectionVec.z());
-        lookDirection.index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(lookDirectionVec.x()));
-        lookDirection.index_put_(new TensorIndexVector(new TensorIndex(1)), new Scalar(lookDirectionVec.y()));
-        lookDirection.index_put_(new TensorIndexVector(new TensorIndex(2)), new Scalar(lookDirectionVec.z()));
-
-        // Set control states
-        // LOGGER.debug("Agent control states: jumping={}, sprinting={}, sneaking={}, onGround={}",
-        //     agent.jumping, agent.actionPack.sprinting, agent.actionPack.sneaking, agent.onGround);
-        observation.jumping().index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(agent.jumping ? 1 : 0));
-        observation.sprinting().index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(agent.actionPack.sprinting ? 1 : 0));
-        observation.sneaking().index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(agent.actionPack.sneaking ? 1 : 0));
-        observation.onGround().index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(agent.onGround ? 1 : 0));
-
-        // Set goal direction
-        Tensor goalDirection = observation.goalDirection();
-        Vec3 goalDirectionVec = goalPosition.subtract(position);
-        goalDirectionVec.normalize();
-        goalDirection.index_put_(new TensorIndexVector(new TensorIndex(0)), new Scalar(goalDirectionVec.x));
-        goalDirection.index_put_(new TensorIndexVector(new TensorIndex(1)), new Scalar(goalDirectionVec.y));
-        goalDirection.index_put_(new TensorIndexVector(new TensorIndex(2)), new Scalar(goalDirectionVec.z));
-
-
-        // Log the observation to the agent's debug log
-        agent.displayObservation(observation);
-
-        // LOGGER.debug("Voxel grid sum: {}", voxelGrid.sum());
-        // LOGGER.debug("Position in block values: [{}, {}, {}]",
-        //     positionInBlock.get(0).item(), positionInBlock.get(1).item(), positionInBlock.get(2).item());
-
-        // Log the observation
-        // LOGGER.debug("Observation: {}", tensorString(observation.data));
-
-        return observation;
-    }
-
-    public Info getInfo() {
-        double distanceToGoal = agent.position().distanceTo(goalPosition);
-
-        // BlockDisplay bblock = new BlockDisplayBuilder(Debugger.WORLD).block(Material.RED_STAINED_GLASS.createBlockData()).build();
-        // bblock.setTransformationMatrix(new Matrix4f().scale(0.1f));
-        // bblock.teleport(new Location(Debugger.WORLD, agent.position().x, agent.position().y, agent.position().z));
-
-
-        Info info = new Info(distanceToGoal);
-        agent.displayInfo(info);
-
-        return info;
-    }
-
-    public ResetResult reset() {
-        this.currentStep = 0;
-        this.agent.reset(roomLocation.clone().add(8.5, 1.5, 8.5));
-
-        // this.goalPosition = new Location(
-        //     roomLocation.getWorld(),
-        //     roomLocation.getX() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ,
-        //     roomLocation.getY() + 1.5 + (Math.random() - 0.5) * GRID_SIZE_Y,
-        //     roomLocation.getZ() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ
-        // );
-        // this.goalPosition = new Vec3(
-        //     (roomLocation.getX() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ),
-        //     (roomLocation.getY() + 1),
-        //     (roomLocation.getZ() + 8.5 + (Math.random() - 0.5) * GRID_SIZE_XZ)
-        // );
-        // if (Math.random() < 0.5) {
-        //     this.goalPosition = new Vec3(
-        //         roomLocation.getX() + (Math.random() - 0.5) * GRID_SIZE_XZ,
-        //         (roomLocation.getY() + 1),
-        //         roomLocation.getZ() + (Math.random() < 0.5 ? (-GRID_SIZE_XZ) : (GRID_SIZE_XZ)) / 2f
-        //     );
-        // } else {
-        //     this.goalPosition = new Vec3(
-        //         roomLocation.getX() + (Math.random() < 0.5 ? (-GRID_SIZE_XZ) : (GRID_SIZE_XZ)) / 2f,
-        //         (roomLocation.getY() + 1),
-        //         roomLocation.getZ() + (Math.random() - 0.5) * GRID_SIZE_XZ
-        //     );
+        // world.getBlockAt(startX + 8, -3, startZ + 8).setType(Material.BEACON);
+        // for (int x = -1; x <= 1; x++) {
+        //     for (int z = -1; z <= 1; z++) {
+        //         world.getBlockAt(startX + 8 + x, -4, startZ + 8 + z).setType(Material.IRON_BLOCK);
+        //     }
         // }
-        double[] randomPoint = getRandomPointInCircle(GRID_SIZE_XZ / 2f, GRID_SIZE_XZ);
-        this.goalPosition = new Vec3(
-            roomLocation.getX() + 8.5 + randomPoint[0],
-            roomLocation.getY() + 1,
-            roomLocation.getZ() + 8.5 + randomPoint[1]
-        );
-        // BlockDisplay bblock = new BlockDisplayBuilder(Debugger.WORLD).block(Material.LIME_STAINED_GLASS.createBlockData()).build();
-        // bblock.setTransformationMatrix(new Matrix4f().scale(0.1f));
-        // bblock.teleport(new Location(Debugger.WORLD, goalPosition.x, goalPosition.y, goalPosition.z));
 
-        Material randomConcrete = new Material[]{
+        randomConcrete = new Material[]{
             Material.WHITE_CONCRETE,
             Material.ORANGE_CONCRETE,
             Material.MAGENTA_CONCRETE,
@@ -310,6 +121,138 @@ public class MinecraftEnvironment {
         }
 
         roomLocation.getWorld().getBlockAt(roomLocation.getBlockX() + 8, 0, roomLocation.getBlockZ() + 8).setType(Material.GOLD_BLOCK);
+
+        MinecraftServer server = ((CraftServer) Bukkit.getServer()).getServer();
+        CompletableFuture<Agent> completableFuture = Agent.spawn(server, new Location(world, startX + 8.5, 1.5, startZ + 8.5));
+        completableFuture.whenComplete((agent, throwable) -> {
+            if (throwable == null) {
+                this.agent = agent;
+            }
+        });
+
+        nextEnvironmentId++;
+    }
+
+    public static double[] getRandomPointInCircle(double minDist, double maxDist) {
+        if (minDist < 0 || maxDist <= minDist) {
+            throw new IllegalArgumentException("Invalid min/max distance");
+        }
+
+        // Uniform distribution over the annulus area
+        double angle = Math.random() * 2 * Math.PI;
+        double radius = Math.sqrt(Math.random() * (maxDist * maxDist - minDist * minDist) + minDist * minDist);
+
+        double x = radius * Math.cos(angle);
+        double y = radius * Math.sin(angle);
+        return new double[]{x, y};
+    }
+
+    public Observation getObservation() {
+        // Observation observation = new Observation();
+        float[] observationData = new float[Observation.OBSERVATION_SPACE_SIZE];
+        int offset = 0;
+
+        // 1. Fill voxel grid data
+        Vec3 position = agent.position();
+        World world = roomLocation.getWorld();
+
+        /*for (int x = -GRID_SIZE_XZ / 2; x < GRID_SIZE_XZ / 2; x++) {
+            for (int z = -GRID_SIZE_XZ / 2; z < GRID_SIZE_XZ / 2; z++) {
+                for (int y = -GRID_SIZE_Y / 2; y < GRID_SIZE_Y / 2; y++) {
+                    int blockX = (int) (position.x() + x);
+                    int blockY = (int) (position.y() + y);
+                    int blockZ = (int) (position.z() + z);
+
+                    if (boundingBox.contains(blockX, blockY, blockZ)) {
+                        int dataIndex = offset + (x + GRID_SIZE_XZ / 2) * GRID_SIZE_XZ * GRID_SIZE_Y +
+                            (z + GRID_SIZE_XZ / 2) * GRID_SIZE_Y + y;
+
+                        Material blockType = world.getBlockAt(blockX, blockY, blockZ).getType();
+                        observationData[dataIndex] = blockType.isSolid() ? 1.0f : 0.0f;
+                    }
+                    // else stays 0.0f (default)
+                }
+            }
+        }*/
+        for (int y = -GRID_SIZE_Y / 2; y <= GRID_SIZE_Y / 2; y++) {
+            for (int x = -GRID_SIZE_XZ / 2; x <= GRID_SIZE_XZ / 2; x++) {
+                for (int z = -GRID_SIZE_XZ / 2; z <= GRID_SIZE_XZ / 2; z++) {
+                    // new TextDisplayBuilder(roomLocation.getWorld())
+                    //     .text(offset++ + "").build().teleport(new Location(world, position.x() + x, position.y() + y, position.z() + z));
+
+                    int index = offset++;
+                    if (offset < 50) {
+                        observationData[index] = 1.0f;
+                    }
+                }
+            }
+        }
+
+        // 2. Position in block (3 values)
+        observationData[offset++] = (float) (position.x() - (int) (position.x()));
+        observationData[offset++] = (float) (position.y() - (int) (position.y()));
+        observationData[offset++] = (float) (position.z() - (int) (position.z()));
+
+        // 3. Velocity (3 values)
+        Vec3 agentVelocity = agent.getDeltaMovement();
+        observationData[offset++] = (float) agentVelocity.x();
+        observationData[offset++] = (float) agentVelocity.y();
+        observationData[offset++] = (float) agentVelocity.z();
+
+        // 4. Look direction (3 values)
+        Vec3 lookDirectionVec = agent.getLookAngle();
+        observationData[offset++] = (float) lookDirectionVec.x();
+        observationData[offset++] = (float) lookDirectionVec.y();
+        observationData[offset++] = (float) lookDirectionVec.z();
+
+        // 5. Boolean flags (4 values)
+        observationData[offset++] = agent.jumping ? 1.0f : 0.0f;
+        observationData[offset++] = agent.actionPack.sprinting ? 1.0f : 0.0f;
+        observationData[offset++] = agent.actionPack.sneaking ? 1.0f : 0.0f;
+        observationData[offset++] = agent.onGround ? 1.0f : 0.0f;
+
+        // 6. Goal direction (3 values)
+        Vec3 goalDirectionVec = goalPosition.subtract(position);
+        goalDirectionVec.normalize();
+        observationData[offset++] = (float) goalDirectionVec.x;
+        observationData[offset++] = (float) goalDirectionVec.y;
+        observationData[offset++] = (float) goalDirectionVec.z;
+
+        // Single tensor operation to set all data at once
+        Observation observation = new Observation(torch.tensor(observationData));
+
+        // Log the observation to the agent's debug log
+        agent.displayObservation(observation);
+
+        return observation;
+    }
+
+    public Info getInfo() {
+        double distanceToGoal = agent.position().distanceTo(goalPosition);
+
+        Info info = new Info(distanceToGoal);
+        agent.displayInfo(info);
+
+        return info;
+    }
+
+
+    public ResetResult reset() {
+        environmentLog.clearLines();
+        this.currentStep = 0;
+        this.agent.reset(roomLocation.clone().add(8.5, 1.5, 8.5));
+
+        if (goalPosition != null) {
+            roomLocation.getWorld().getBlockAt((int) goalPosition.x, roomLocation.getBlockY(), (int) goalPosition.z).setType(randomConcrete);
+        }
+
+        double[] randomPoint = getRandomPointInCircle(GRID_SIZE_XZ / 2f, GRID_SIZE_XZ);
+        this.goalPosition = new Vec3(
+            roomLocation.getX() + 8.5 + randomPoint[0],
+            roomLocation.getY() + 1,
+            roomLocation.getZ() + 8.5 + randomPoint[1]
+        );
+
         roomLocation.getWorld().getBlockAt((int) goalPosition.x, roomLocation.getBlockY(), (int) goalPosition.z).setType(Material.EMERALD_BLOCK);
 
         Observation observation = getObservation();
@@ -361,14 +304,14 @@ public class MinecraftEnvironment {
     }
 
     public StepResult postTickStep() {
-        ///  RIGHT HERE I NEED TO TICK THE SERVER! AHHHHHHHHHHHH
-
         // --- Calculate rewards
         Info info = getInfo();
 
         // LOGGER.debug("Calculating reward based on distance to goal: {}", info.distanceToGoal());
 
-        double reward = (this.previousDistanceToGoal - info.distanceToGoal()) * 10.0; // Reward based on distance to goal
+        // Positive is closer to goal, negative is further from goal
+        double deltaDistanceToGoal = info.distanceToGoal() - previousDistanceToGoal;
+        double reward = (deltaDistanceToGoal) * 10.0; // Reward based on distance to goal
         previousDistanceToGoal = info.distanceToGoal();
 
         reward -= 0.05; // Small penalty for each step taken
@@ -385,6 +328,23 @@ public class MinecraftEnvironment {
         boolean truncated = this.currentStep > this.args.numSteps;
 
         // LOGGER.debug("Truncated step: {}", truncated);
+
+
+        environmentLog.addLine(Component.newline().append(
+            Component.text(" S: " + currentStep).color(NamedTextColor.YELLOW),
+            Component.newline(),
+            Component.text(" D: "),
+            Component.text(String.format("%.2f", info.distanceToGoal())),
+            Component.newline(),
+            Component.text("ΔD: "),
+            Component.text(String.format("%.2f", deltaDistanceToGoal))
+                .color(deltaDistanceToGoal > 0 ? NamedTextColor.GREEN : NamedTextColor.RED),
+            Component.newline(),
+            Component.text(" R: "),
+            Component.text(String.format("%.2f", reward))
+                .color(reward > 50 ? NamedTextColor.GOLD : reward > 0 ? NamedTextColor.GREEN : NamedTextColor.RED)
+        ));
+
 
         return new StepResult(getObservation(), reward, terminated, truncated, info);
     }

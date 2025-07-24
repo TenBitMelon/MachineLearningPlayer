@@ -48,6 +48,7 @@ import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class Agent extends ServerPlayer {
 
+    public static int agentCount = 0;
     public final EntityPlayerActionPack actionPack = new EntityPlayerActionPack(this);
     final ControlsWindow debugWindow = new ControlsWindow();
     final TextControl infoDisplayControl = new TextControl("Latest Info: ");
@@ -74,14 +75,14 @@ public class Agent extends ServerPlayer {
         CompletableFuture<Agent> agentFuture = new CompletableFuture<>();
 
         String username = UUID.randomUUID().toString().substring(0, 3);
-
+        // String username = String.valueOf(agentCount++);
         // -- Stolen from Carpet Mod: https://github.com/gnembon/fabric-carpet --
 
         ServerLevel worldIn = server.overworld();
         GameProfileCache.setUsesAuthentication(false);
-        GameProfile gameprofile;
+        GameProfile gameprofile = null;
         try {
-            gameprofile = server.getProfileCache().get(username).orElse(null); // findByName  .orElse(null)
+            // gameprofile = server.getProfileCache().get(username).orElse(null); // findByName  .orElse(null)
         } finally {
             GameProfileCache.setUsesAuthentication(server.isDedicatedServer() && server.usesAuthentication());
         }
@@ -243,8 +244,10 @@ public class Agent extends ServerPlayer {
         this.reset();
         this.actionPack.stopAll();
 
-        this.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
-        this.teleportTo(((CraftWorld) location.getWorld()).getHandle(), location.getX(), location.getY(), location.getZ(), Set.of(), 0.0f, 0.0f, true);
+        float yRot = (float) (Math.random() * 180.0f - 90.0f);
+        float xRot = (float) (Math.random() * 360.0f - 180.0f);
+        this.snapTo(location.getX(), location.getY(), location.getZ(), yRot, xRot);
+        this.teleportTo(((CraftWorld) location.getWorld()).getHandle(), location.getX(), location.getY(), location.getZ(), Set.of(), yRot, xRot, true);
         this.setHealth(20.0F);
     }
 }

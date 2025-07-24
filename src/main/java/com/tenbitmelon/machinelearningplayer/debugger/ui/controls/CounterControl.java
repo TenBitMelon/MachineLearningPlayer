@@ -3,7 +3,9 @@ package com.tenbitmelon.machinelearningplayer.debugger.ui.controls;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.util.BlockDisplayBuilder;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.entity.BlockDisplay;
 import org.jetbrains.annotations.NotNull;
@@ -26,15 +28,21 @@ public class CounterControl extends Control {
     }
 
     public @NotNull Component renderValue() {
-        return Component.text("←").clickEvent(ClickEvent.callback((audience -> {
+        return Component.text("↞").clickEvent(ClickEvent.callback((audience -> {
+                int currentValue = getter.get();
+                setter.accept(currentValue - 10);
+            }))).append(Component.text("←").clickEvent(ClickEvent.callback((audience -> {
                 int currentValue = getter.get();
                 setter.accept(currentValue - 1);
-            })))
+            }))))
             .append(Component.text(getter.get().toString()))
             .append(Component.text("→")
                 .clickEvent(ClickEvent.callback((audience -> {
                     int currentValue = getter.get();
                     setter.accept(currentValue + 1);
-                }))));
+                })))).append(Component.text("↠").clickEvent(ClickEvent.callback((audience -> {
+                int currentValue = getter.get();
+                setter.accept(currentValue + 10);
+            }))));
     }
 }

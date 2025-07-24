@@ -67,15 +67,15 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         //     }
         // }
         // Device device = args.cuda ? torch.device(torch.kCUDA) : torch.device(torch.kCPU);
-        // System.out.println("torch.cuda_is_available() = " + org.bytedeco.pytorch.global.torch.cuda_is_available());
-        // System.out.println("torch.cuda_device_count() = " + org.bytedeco.pytorch.global.torch.cuda_device_count());
-        // System.out.println("torch.hasCUDA() = " + torch.hasCUDA());
+        System.out.println("torch.cuda_is_available() = " + org.bytedeco.pytorch.global.torch.cuda_is_available());
+        System.out.println("torch.cuda_device_count() = " + org.bytedeco.pytorch.global.torch.cuda_device_count());
+        System.out.println("torch.hasCUDA() = " + torch.hasCUDA());
         //
-        // Device device = new Device("cuda:0");
-        // System.out.println("device = " + device);
-        // System.out.println("device = " + device.is_cuda());
-        // System.out.println("device = " + device.is_cpu());
-        // System.out.println("device = " + device.type().toString());
+        Device device = new Device("cuda:0");
+        System.out.println("device = " + device);
+        System.out.println("is_cuda = " + device.is_cuda());
+        System.out.println("is_cpu = " + device.is_cpu());
+        System.out.println("type = " + device.type().toString());
 
 
         LOGGER = new Logger();
@@ -99,6 +99,12 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         world.setStorm(false);
         world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
         world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        world.setGameRule(GameRule.RANDOM_TICK_SPEED, 0);
+        world.setGameRule(GameRule.DO_ENTITY_DROPS, false);
+        world.setGameRule(GameRule.DO_TILE_DROPS, false);
+        world.setGameRule(GameRule.DO_INSOMNIA, false);
+        world.setGameRule(GameRule.DO_IMMEDIATE_RESPAWN, true);
+
 
         // DedicatedServer server = ((CraftServer) Bukkit.getServer()).getServer();
         // ServerTickRateManager serverTickRateManager = server.tickRateManager();
@@ -113,7 +119,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         for (Entity entity : world.getEntities()) {
             if (entity instanceof Player player) {
                 if (player.getGameMode() == GameMode.CREATIVE) {
-                    player.teleport(new Location(world, 1, 1, 1));
+                    player.teleport(new Location(world, 16, 5, 20, 180, 0));
                 } else {
                     player.kick();
                 }

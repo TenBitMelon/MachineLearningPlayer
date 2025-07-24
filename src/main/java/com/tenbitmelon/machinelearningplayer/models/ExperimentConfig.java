@@ -14,7 +14,7 @@ public class ExperimentConfig {
     /**
      * The number of parallel game environments.
      */
-    public final int numEnvs = 32;
+    public final int numEnvs = 64;
     /**
      * Toggle learning rate annealing for policy and value networks.
      */
