@@ -635,7 +635,7 @@ public class MinecraftRL extends Module {
     public void saveCheckpoint(int iteration) {
         OutputArchive outputArchive = new OutputArchive();
         this.save(outputArchive);
-        outputArchive.save_to("minecraft_rl_checkpoint_" + iteration + ".pt");
+        outputArchive.save_to("model_files/minecraft_rl_checkpoint_" + iteration + ".pt");
     }
 
     /**

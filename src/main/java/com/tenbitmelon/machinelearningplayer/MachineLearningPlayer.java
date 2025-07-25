@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -184,12 +185,18 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
     @Override
     public void onDisable() {
         Debugger.stop();
+        TrainingManager.shutdown();
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         event.getPlayer().sendMessage(Component.text("Hello, " + event.getPlayer().getName() + "!"));
     }
+
+    // @EventHandler
+    // public void onMove(PlayerMoveEvent event) {
+    //     System.out.println(event.getPlayer().getVelocity());
+    // }
 
     // static class Net extends Module {
     //     // Use one of many "standard library" modules.
@@ -213,54 +220,4 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
     //     }
     // }
 
-    private void loadExternalDependencies() {
-        File libDir = new File(getDataFolder().getParentFile(), "lib");
-        if (!libDir.exists()) {
-            getLogger().warning("Lib directory doesn't exist: " + libDir.getAbsolutePath());
-            return;
-        }
-
-        File[] jarFiles = libDir.listFiles((dir, name) -> name.endsWith(".jar"));
-        if (jarFiles == null || jarFiles.length == 0) {
-            getLogger().warning("No JAR files found in lib directory");
-            return;
-        }
-
-        try {
-            // Get the plugin's classloader
-            ClassLoader pluginClassLoader = this.getClass().getClassLoader();
-
-            // Use reflection to access the addURL method
-            Method addURL = null;
-            Class<?> currentClass = pluginClassLoader.getClass();
-
-            // Walk up the class hierarchy to find URLClassLoader
-            while (currentClass != null && addURL == null) {
-                try {
-                    addURL = currentClass.getDeclaredMethod("addURL", URL.class);
-                } catch (NoSuchMethodException e) {
-                    currentClass = currentClass.getSuperclass();
-                }
-            }
-
-            if (addURL != null) {
-                addURL.setAccessible(true);
-
-                for (File jar : jarFiles) {
-                    try {
-                        addURL.invoke(pluginClassLoader, jar.toURI().toURL());
-                        getLogger().info("Loaded dependency: " + jar.getName());
-                    } catch (Exception e) {
-                        getLogger().warning("Failed to load " + jar.getName() + ": " + e.getMessage());
-                    }
-                }
-            } else {
-                getLogger().warning("Could not find addURL method in classloader hierarchy");
-            }
-
-        } catch (Exception e) {
-            getLogger().severe("Failed to load external dependencies: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
 }

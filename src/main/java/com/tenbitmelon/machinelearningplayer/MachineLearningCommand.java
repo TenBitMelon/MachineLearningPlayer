@@ -8,14 +8,12 @@ import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
+import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import io.papermc.paper.adventure.providers.ClickCallbackProviderImpl;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.minecraft.server.MinecraftServer;
-import org.bukkit.Chunk;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.World;
+import org.bukkit.*;
 import org.bukkit.command.CommandSender;
 import org.slf4j.event.Level;
 
@@ -57,6 +55,16 @@ public class MachineLearningCommand {
             }))
             .then(Commands.literal("removeDisplays").executes(ctx -> {
                 Debugger.stop();
+                return Command.SINGLE_SUCCESS;
+            }))
+            .then(Commands.literal("productionRun").executes(ctx -> {
+                CommandSender sender = ctx.getSource().getSender();
+                sender.sendPlainMessage("Starting production run...");
+                Bukkit.dispatchCommand(sender, "ml uiupdates");
+                Bukkit.dispatchCommand(sender, "ml clearUiCallbacks");
+                Bukkit.dispatchCommand(sender, "ml removeDisplays");
+                TrainingManager.sprint = true;
+                TrainingManager.runTraining = true;
                 return Command.SINGLE_SUCCESS;
             }))
             .then(logLevels())
@@ -105,7 +113,6 @@ public class MachineLearningCommand {
         return Commands.literal("args").executes(ctx -> {
                 CommandSender sender = ctx.getSource().getSender();
                 sender.sendPlainMessage("=== Arguments:");
-                sender.sendPlainMessage("Seed: " + config.seed);
                 sender.sendPlainMessage("Learning Rate: " + config.learningRate);
                 sender.sendPlainMessage("Number of Environments: " + config.numEnvs);
                 sender.sendPlainMessage("Anneal Learning Rate: " + config.annealLr);
@@ -120,25 +127,11 @@ public class MachineLearningCommand {
                 sender.sendPlainMessage("Value Function Coefficient: " + config.vfCoef);
                 sender.sendPlainMessage("Max Gradient Norm: " + config.maxGradNorm);
                 sender.sendPlainMessage("Target KL: " + config.targetKl);
-                sender.sendPlainMessage("Experiment Name: " + config.expName);
-                sender.sendPlainMessage("Torch Deterministic: " + config.torchDeterministic);
-                sender.sendPlainMessage("CUDA Enabled: " + config.cuda);
-                sender.sendPlainMessage("Track with WandB: " + config.track);
-                sender.sendPlainMessage("WandB Project Name: " + config.wandbProjectName);
-                sender.sendPlainMessage("WandB Entity: " + (config.wandbEntity != null ? config.wandbEntity : "None"));
-                sender.sendPlainMessage("Capture Video: " + config.captureVideo);
                 sender.sendPlainMessage("Number of Steps: " + config.numSteps);
                 sender.sendPlainMessage("Batch Size: " + config.batchSize);
-                sender.sendPlainMessage("Mini-batch Size: " + config.minibatchSize);
                 sender.sendPlainMessage("Number of Iterations: " + config.numIterations);
                 return Command.SINGLE_SUCCESS;
             })
-            .then(Commands.literal("seed").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("Seed: " + config.seed);
-                sender.sendPlainMessage("Seed of the experiment.");
-                return Command.SINGLE_SUCCESS;
-            }))
             .then(Commands.literal("learningRate").executes(ctx -> {
                 CommandSender sender = ctx.getSource().getSender();
                 sender.sendPlainMessage("Learning Rate: " + config.learningRate);
@@ -223,48 +216,6 @@ public class MachineLearningCommand {
                 sender.sendPlainMessage("The target KL divergence threshold. Can be null if not used.");
                 return Command.SINGLE_SUCCESS;
             }))
-            .then(Commands.literal("expName").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("Experiment Name: " + config.expName);
-                sender.sendPlainMessage("The name of this experiment.");
-                return Command.SINGLE_SUCCESS;
-            }))
-            .then(Commands.literal("torchDeterministic").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("Torch Deterministic: " + config.torchDeterministic);
-                sender.sendPlainMessage("If toggled (true), PyTorch's `torch.backends.cudnn.deterministic` is typically set to true.");
-                return Command.SINGLE_SUCCESS;
-            }))
-            .then(Commands.literal("cuda").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("CUDA Enabled: " + config.cuda);
-                sender.sendPlainMessage("If toggled (true), CUDA will be enabled by default if available.");
-                return Command.SINGLE_SUCCESS;
-            }))
-            .then(Commands.literal("track").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("Track with WandB: " + config.track);
-                sender.sendPlainMessage("If toggled (true), this experiment will be tracked with Weights and Biases.");
-                return Command.SINGLE_SUCCESS;
-            }))
-            .then(Commands.literal("wandbProjectName").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("WandB Project Name: " + config.wandbProjectName);
-                sender.sendPlainMessage("The WandB's project name.");
-                return Command.SINGLE_SUCCESS;
-            }))
-            .then(Commands.literal("wandbEntity").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("WandB Entity: " + (config.wandbEntity != null ? config.wandbEntity : "None"));
-                sender.sendPlainMessage("The entity (team) of WandB's project. Can be null.");
-                return Command.SINGLE_SUCCESS;
-            }))
-            .then(Commands.literal("captureVideo").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("Capture Video: " + config.captureVideo);
-                sender.sendPlainMessage("Whether to capture videos of the agent performances (check out `videos` folder).");
-                return Command.SINGLE_SUCCESS;
-            }))
             .then(Commands.literal("numSteps").executes(ctx -> {
                 CommandSender sender = ctx.getSource().getSender();
                 sender.sendPlainMessage("Number of Steps: " + config.numSteps);
@@ -278,12 +229,6 @@ public class MachineLearningCommand {
                 CommandSender sender = ctx.getSource().getSender();
                 sender.sendPlainMessage("Batch Size: " + config.batchSize);
                 sender.sendPlainMessage("The batch size (computed in runtime, e.g., numEnvs * numSteps).");
-                return Command.SINGLE_SUCCESS;
-            }))
-            .then(Commands.literal("minibatchSize").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("Mini-batch Size: " + config.minibatchSize);
-                sender.sendPlainMessage("The mini-batch size (computed in runtime, e.g., batchSize / numMinibatches).");
                 return Command.SINGLE_SUCCESS;
             }))
             .then(Commands.literal("numIterations").executes(ctx -> {

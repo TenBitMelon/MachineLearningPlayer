@@ -31,7 +31,6 @@ public class Action {
     public Action(Tensor data) {
         this.data = data;
         this.cachedData = data
-            .cpu()
             .data_ptr_float();
     }
 

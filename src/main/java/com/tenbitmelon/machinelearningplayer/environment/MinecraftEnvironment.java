@@ -15,6 +15,7 @@ import org.bukkit.entity.Display;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.util.BoundingBox;
 import org.bytedeco.pytorch.Tensor;
+import org.bytedeco.pytorch.TensorOptions;
 import org.bytedeco.pytorch.global.torch;
 
 import java.util.concurrent.CompletableFuture;
@@ -200,7 +201,7 @@ public class MinecraftEnvironment {
         observationData[offset++] = (float) agentVelocity.z();
 
         // 4. Look direction (3 values)
-        Vec3 lookDirectionVec = agent.getLookAngle();
+        Vec3 lookDirectionVec = agent.getLookAngle().normalize();
         observationData[offset++] = (float) lookDirectionVec.x();
         observationData[offset++] = (float) lookDirectionVec.y();
         observationData[offset++] = (float) lookDirectionVec.z();
@@ -212,14 +213,13 @@ public class MinecraftEnvironment {
         observationData[offset++] = agent.onGround ? 1.0f : 0.0f;
 
         // 6. Goal direction (3 values)
-        Vec3 goalDirectionVec = goalPosition.subtract(position);
-        goalDirectionVec.normalize();
+        Vec3 goalDirectionVec = goalPosition.subtract(position).normalize();
         observationData[offset++] = (float) goalDirectionVec.x;
         observationData[offset++] = (float) goalDirectionVec.y;
         observationData[offset++] = (float) goalDirectionVec.z;
 
         // Single tensor operation to set all data at once
-        Observation observation = new Observation(torch.tensor(observationData));
+        Observation observation = new Observation(torch.tensor(observationData)); // TODO: Construct on device
 
         // Log the observation to the agent's debug log
         agent.displayObservation(observation);

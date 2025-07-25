@@ -13,11 +13,8 @@ import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.global.torch;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Random;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class TrainingManager {
 
@@ -30,15 +27,15 @@ public class TrainingManager {
     static MinecraftRL.LSTMState initialLSTMState;
     static MinecraftRL.LSTMState nextLstmState;
     static VectorResetResult resetResult;
-    static AdamOptions adamOptions;
-    static Adam optimizer;
+    static AdamWOptions adamOptions;
+    static AdamW optimizer;
 
-    static int globalStep = 0;
-    static long startTime = System.currentTimeMillis();
+    static long iterationStartTime = System.currentTimeMillis();
     static int iteration = 1;
     static int step = 0;
     static Device device;
     static String logText = "";
+    static TrainingLogger trainingLogger;
 
     /** Shape: [numEnvs, Observation.OBSERVATION_SPACE_SIZE] */
     private static Tensor nextObs;
@@ -76,6 +73,8 @@ public class TrainingManager {
         device = new Device("cuda:0");
         model.to(device, false);
 
+        trainingLogger = new TrainingLogger(args, "logs/training");
+
         // LOGGER.debug("MinecraftRL model initialized.");
 
         // Device device = args.cuda ? torch.device(torch.kCUDA) : torch.device(torch.kCPU);
@@ -88,8 +87,8 @@ public class TrainingManager {
             torch.zeros(model.getLSTMLayers(), args.numEnvs, model.lstmHiddenSize).cuda());
         // LOGGER.debug("Initial LSTM state created. Hidden shape: {}, Cell shape: {}", nextLstmState.hiddenState().shape(), nextLstmState.cellState().shape());
 
-        adamOptions = new AdamOptions(args.learningRate);
-        optimizer = new Adam(model.parameters(), adamOptions);
+        adamOptions = new AdamWOptions(args.learningRate);
+        optimizer = new AdamW(model.parameters(), adamOptions);
         adamOptions.eps().put(1e-5);
         // LOGGER.debug("Adam optimizer initialized with learning rate: {}", args.learningRate);
 
@@ -127,11 +126,14 @@ public class TrainingManager {
         Debugger.mainDebugWindow.addControl(new CounterControl(Component.text("Num Iterations"), () -> args.numIterations, (value) -> args.numIterations = value));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Num Envs"), () -> args.numEnvs));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Batch Size"), () -> args.batchSize));
-        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Mini Batch Size"), () -> args.minibatchSize));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Num Mini Batch"), () -> args.numMinibatches));
 
 
         // LOGGER.debug("--- Training Manager setup complete ---");
+    }
+
+    public static void shutdown() {
+        trainingLogger.close();
     }
 
     // Placeholder for future implementation
@@ -150,7 +152,7 @@ public class TrainingManager {
 
         if (resetResult == null) {
             LOGGER.info("Initial environment reset...");
-            resetResult = environment.reset(args.seed);
+            resetResult = environment.reset();
 
             // Log
             // LOGGER.debug("Environment reset complete. Observations shape: {}, Infos length: {}", resetObservations.shape(), resetResult.infos().length);
@@ -180,8 +182,12 @@ public class TrainingManager {
     }
 
     public static void epochSetup() {
-        LOGGER.info("==================== Starting Epoch Setup for Iteration: {} ====================", iteration);
+        // LOGGER.info("==================== Starting Epoch Setup for Iteration: {} ====================", iteration);
         logText = "Epoch Setup...";
+
+        iterationStartTime = System.currentTimeMillis();
+
+
         // for iteration in range(1, args.num_iterations + 1):
 
         // if (iteration >= 2) {
@@ -233,7 +239,7 @@ public class TrainingManager {
                 dones[step] = next_done
                  */
 
-        globalStep += args.numEnvs;
+        // globalStep += args.numEnvs;
         // LOGGER.debug("Next Obs: {}", tensorString(nextObs));
         // LOGGER.debug("Observations before storing: {}", tensorString(observations));
         // LOGGER.debug("Observations after storing: {}", tensorString(observations));
@@ -273,7 +279,9 @@ public class TrainingManager {
 
         logText = "Stepping environment for step " + step;
         // LOGGER.debug("[Step {}] Stepping environment with action (shape: {})", step, actionResult.action().shape());
-        environment.preTickStep(actionResult.action());
+
+        Tensor actionTensor = actionResult.action().cpu();
+        environment.preTickStep(actionTensor);
         needsPostTickStep = true;
     }
 
@@ -321,7 +329,6 @@ public class TrainingManager {
     public static void finishEpoch() {
         logText = "Finish Epoch...";
 
-        iteration++;
 
 
             /*
@@ -706,7 +713,7 @@ public class TrainingManager {
             )
              */
 
-        LOGGER.info("--- Epoch {} Summary ---", iteration);
+        // LOGGER.info("--- Epoch {} Summary ---", iteration);
         // LOGGER.info("Learning Rate: {}", optimizer.param_groups().get(0).options().get_lr());
         // LOGGER.info("Value Loss: {}", vLoss.item().toFloat());
         // LOGGER.info("Policy Loss: {}", pgLoss.item().toFloat());
@@ -715,10 +722,28 @@ public class TrainingManager {
         // if (approxKl != null) LOGGER.info("Approx KL: {}", approxKl.item().toFloat());
         // LOGGER.info("Clip Fraction: {}", clipFracs.stream().mapToDouble(Float::doubleValue).average().orElse(0.0));
         // LOGGER.info("Explained Variance: {}", explainedVar);
-        LOGGER.info("Steps Per Second (SPS): {}", (int) (globalStep / ((System.currentTimeMillis() - startTime) / 1000.0)));
-        LOGGER.info("Steps Per Second Per Env (SPSPE): {}", (int) ((double) globalStep / args.numEnvs / ((System.currentTimeMillis() - startTime) / 1000.0)));
-        LOGGER.info("Global Step Count: {}", globalStep);
+        // LOGGER.info("Steps Per Second (SPS): {}", (int) (globalStep / ((System.currentTimeMillis() - startTime) / 1000.0)));
+        // LOGGER.info("Steps Per Second Per Env (SPSPE): {}", (int) ((double) globalStep / args.numEnvs / ((System.currentTimeMillis() - startTime) / 1000.0)));
+        // LOGGER.info("Global Step Count: {}", globalStep);
         LOGGER.info("==================== Finished Epoch for Iteration:      {} ====================", iteration - 1);
+
+        // After metrics calculation, log to CSV
+        try {
+            double learningRate = optimizer.param_groups().get(0).options().get_lr();
+            double valueLoss = vLoss.item().toDouble();
+            double policyLoss = pgLoss.item().toDouble();
+            double entropy = entropyLoss.item().toDouble();
+            Double oldApproxKlVal = oldApproxKl != null ? oldApproxKl.item().toDouble() : null;
+            Double approxKlVal = approxKl != null ? approxKl.item().toDouble() : null;
+            double clipfrac = clipFracs.stream().mapToDouble(Float::doubleValue).average().orElse(0.0);
+            double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
+            double sps = ((args.numEnvs * args.numSteps) / iterationTime);
+            trainingLogger.logStep(iteration, learningRate, valueLoss, policyLoss, entropy, oldApproxKlVal, approxKlVal, clipfrac, explainedVar, iterationTime, sps);
+        } catch (Exception e) {
+            LOGGER.error("Failed to log training metrics: {}", e.getMessage());
+        }
+
+        iteration++;
 
         if (iteration % 200 == 0) {
             model.saveCheckpoint(iteration);

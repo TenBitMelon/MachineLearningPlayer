@@ -41,7 +41,7 @@ public class SyncedVectorEnvironment {
             .toArray(Info[]::new);
     }
 
-    public VectorResetResult reset(int seed) {
+    public VectorResetResult reset() {
         Observation[] observations = new Observation[numEnvs];
         Info[] infos = new Info[numEnvs];
 

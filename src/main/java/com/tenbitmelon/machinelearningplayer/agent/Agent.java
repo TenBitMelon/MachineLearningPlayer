@@ -69,6 +69,8 @@ public class Agent extends ServerPlayer {
         debugWindow.addControl(new TextControl(""));
         debugWindow.addControl(new TextControl("Info Display:"));
         debugWindow.addControl(infoDisplayControl);
+
+
     }
 
     public static CompletableFuture<Agent> spawn(MinecraftServer server, Location location) {
