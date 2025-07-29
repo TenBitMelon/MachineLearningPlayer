@@ -11,8 +11,6 @@ import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
 
-import static com.tenbitmelon.machinelearningplayer.models.TrainingManager.device;
-
 public class MinecraftRL extends Module {
 
     public final long otherFeaturesDim = 128;
@@ -22,7 +20,7 @@ public class MinecraftRL extends Module {
     private final SequentialImpl otherInputsProcessor;
     private final SequentialImpl sharedNetwork;
     private final LSTMImpl lstm;
-    private final LinearImpl critic;
+    private final SequentialImpl critic;
     private final LinearImpl actorLookChangeMean;
     private final Tensor actorLookChangeLogSTD;
     private final LinearImpl actorSprintKey;
@@ -227,7 +225,16 @@ public class MinecraftRL extends Module {
         LinearImpl actorJumpKey = createLinearLayer(actorInputDim, 1, 0.01);
         LinearImpl actorMoveKeys = createLinearLayer(actorInputDim, 4, 0.01);
 
-        LinearImpl critic = createLinearLayer(actorInputDim, 1, 1.0);
+
+        // LinearImpl critic = createLinearLayer(actorInputDim, 1, 1.0);
+        LinearImpl criticLinear1 = createLinearLayer(actorInputDim, 256, 1.0);
+        ReLUImpl criticReLU1 = new ReLUImpl();
+        LinearImpl criticLinear2 = createLinearLayer(256, 1, 1.0);
+
+        SequentialImpl critic = new SequentialImpl();
+        critic.push_back("critic_linear1", criticLinear1);
+        critic.push_back("critic_relu1", criticReLU1);
+        critic.push_back("critic_linear2", criticLinear2);
 
         register_module("actor_look_change_mean", actorLookChangeMean);
         register_parameter("actor_look_change_logstd", actorLookChangeLogSTD);
@@ -517,6 +524,7 @@ public class MinecraftRL extends Module {
         if (action == null) {
             // LOGGER.debug("Action is null, sampling new actions.");
             Tensor lookSample = lookDist.sample();
+            // TODO: Do these need to be put through a tanh or sigmoid?
             Tensor sprintSample = sprintDist.sample();
             Tensor sneakSample = sneakDist.sample();
             Tensor jumpSample = jumpDist.sample();
@@ -636,6 +644,16 @@ public class MinecraftRL extends Module {
         OutputArchive outputArchive = new OutputArchive();
         this.save(outputArchive);
         outputArchive.save_to("model_files/minecraft_rl_checkpoint_" + iteration + ".pt");
+    }
+
+    public void loadCheckpoint(Integer iteration) {
+        if (iteration == null) {
+            return;
+        }
+        InputArchive inputArchive = new InputArchive();
+        inputArchive.load_from("model_files/minecraft_rl_checkpoint_" + iteration + ".pt");
+        this.load(inputArchive);
+
     }
 
     /**

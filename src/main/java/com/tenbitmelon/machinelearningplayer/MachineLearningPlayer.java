@@ -137,6 +137,8 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         new BukkitRunnable() {
             @Override
             public void run() {
+                // TODO: Pop the GPU part of this out into a separate thread. IDK how model updates will work with a new thread, maybe a bad idea
+                // Have minecraft continuously add to a queue of training steps
                 TrainingManager.trainingStep();
                 Debugger.update();
             }

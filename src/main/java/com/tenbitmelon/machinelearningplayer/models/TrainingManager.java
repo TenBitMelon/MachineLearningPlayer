@@ -62,6 +62,7 @@ public class TrainingManager {
 
     private static boolean runningInnerLoop = false;
     private static boolean needsPostTickStep = false;
+    private static int numTerminations = 0;
 
     public static void setup() {
         // LOGGER.debug("--- Setting up Training Manager ---");
@@ -70,6 +71,7 @@ public class TrainingManager {
         environment = new SyncedVectorEnvironment(args);
         // LOGGER.debug("SyncedVectorEnvironment initialized.");
         model = new MinecraftRL(environment);
+        model.loadCheckpoint(args.startingCheckpoint);
         device = new Device("cuda:0");
         model.to(device, false);
 
@@ -87,14 +89,21 @@ public class TrainingManager {
             torch.zeros(model.getLSTMLayers(), args.numEnvs, model.lstmHiddenSize).cuda());
         // LOGGER.debug("Initial LSTM state created. Hidden shape: {}, Cell shape: {}", nextLstmState.hiddenState().shape(), nextLstmState.cellState().shape());
 
+        // TODO: torch.cuda.amp.autocast for mixed precision training
+        // TODO: gradient scaling
+
+        // TODO: torch.compile()
+
+
         adamOptions = new AdamWOptions(args.learningRate);
         optimizer = new AdamW(model.parameters(), adamOptions);
-        adamOptions.eps().put(1e-5);
+        adamOptions.eps().put(1e-7);
         // LOGGER.debug("Adam optimizer initialized with learning rate: {}", args.learningRate);
 
         nextDone = torch.zeros(args.numEnvs).cuda();
         // LOGGER.debug("Initial 'nextDone' tensor created. Shape: {}", nextDone.shape());
 
+        // TODO: Use pinned memory for a lot of this
         observations = torch.zeros(args.numSteps, args.numEnvs, Observation.OBSERVATION_SPACE_SIZE).cuda();
         actions = torch.zeros(args.numSteps, args.numEnvs, Action.ACTION_SPACE_SIZE).cuda();
         logprobs = torch.zeros(args.numSteps, args.numEnvs).cuda();
@@ -197,6 +206,8 @@ public class TrainingManager {
             return;
         }
 
+        numTerminations = 0;
+
 
             /*
             initial_lstm_state = (next_lstm_state[0].clone(), next_lstm_state[1].clone())
@@ -280,6 +291,7 @@ public class TrainingManager {
         logText = "Stepping environment for step " + step;
         // LOGGER.debug("[Step {}] Stepping environment with action (shape: {})", step, actionResult.action().shape());
 
+        // TODO: convert items to booleans and bitpack them into ints for faster transfer
         Tensor actionTensor = actionResult.action().cpu();
         environment.preTickStep(actionTensor);
         needsPostTickStep = true;
@@ -293,9 +305,11 @@ public class TrainingManager {
             return;
         }
         VectorStepResult stepResult = environment.postTickStep();
+        // TODO: Better typing for CUDA transfer and tensor creation
         nextDone = Tensor.create(stepResult.logicalOrTerminationsAndTruncations()).cuda();
         rewards.get(step).copy_(Tensor.create(stepResult.rewards()).cuda());
         nextObs = stepResult.observationsTensor().cuda();
+        numTerminations += stepResult.numTerminations();
         // LOGGER.debug("Next obs: {}", tensorString(nextObs));
         // LOGGER.debug("[Step {}] Environment step complete. New obs shape: {}, new rewards shape: {}, new done shape: {}", step, nextObs.shape(), rewards.get(step).shape(), nextDone.shape());
 
@@ -729,6 +743,7 @@ public class TrainingManager {
 
         // After metrics calculation, log to CSV
         try {
+            // TODO: Log the GPU time vs the CPU time & ratio
             double learningRate = optimizer.param_groups().get(0).options().get_lr();
             double valueLoss = vLoss.item().toDouble();
             double policyLoss = pgLoss.item().toDouble();
@@ -738,7 +753,8 @@ public class TrainingManager {
             double clipfrac = clipFracs.stream().mapToDouble(Float::doubleValue).average().orElse(0.0);
             double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
             double sps = ((args.numEnvs * args.numSteps) / iterationTime);
-            trainingLogger.logStep(iteration, learningRate, valueLoss, policyLoss, entropy, oldApproxKlVal, approxKlVal, clipfrac, explainedVar, iterationTime, sps);
+            double averageRewards = rewards.mean().item().toDouble();
+            trainingLogger.logStep(iteration, learningRate, valueLoss, policyLoss, entropy, oldApproxKlVal, approxKlVal, clipfrac, explainedVar, iterationTime, sps, numTerminations, averageRewards);
         } catch (Exception e) {
             LOGGER.error("Failed to log training metrics: {}", e.getMessage());
         }

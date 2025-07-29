@@ -4,6 +4,7 @@ import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
+import com.tenbitmelon.machinelearningplayer.util.TextDisplayBuilder;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.minecraft.server.MinecraftServer;
@@ -17,6 +18,8 @@ import org.bukkit.util.BoundingBox;
 import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.TensorOptions;
 import org.bytedeco.pytorch.global.torch;
+import org.joml.AxisAngle4f;
+import org.joml.Quaternionf;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -219,7 +222,9 @@ public class MinecraftEnvironment {
         observationData[offset++] = (float) goalDirectionVec.z;
 
         // Single tensor operation to set all data at once
-        Observation observation = new Observation(torch.tensor(observationData)); // TODO: Construct on device
+        // TODO: Construct on device
+        // TODO: or reuse the observations [numEnvs, obsSize] tensor and insert this observation into it
+        Observation observation = new Observation(torch.tensor(observationData));
 
         // Log the observation to the agent's debug log
         agent.displayObservation(observation);
@@ -229,6 +234,8 @@ public class MinecraftEnvironment {
 
     public Info getInfo() {
         double distanceToGoal = agent.position().distanceTo(goalPosition);
+
+        // TODO: I don't think this is used when called from Reset() so it can just be calculated in postTickStep()
 
         Info info = new Info(distanceToGoal);
         agent.displayInfo(info);
@@ -270,10 +277,13 @@ public class MinecraftEnvironment {
         this.currentStep++;
 
         // LOGGER.debug("Updating agent action pack with action before: {}", agent.actionPack);
-        agent.actionPack.setSprinting(action.sprinting() == 1);
-        agent.actionPack.setSneaking(action.sneaking() == 1);
+        if (action.sneaking() == 1) {
+            agent.actionPack.setSneaking(true);
+        } else {
+            agent.actionPack.setSprinting(action.sprinting() == 1);
+        }
         if (action.jumping() == 1) {
-            agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
+            // agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
         }
 
         Vec2 rotation = action.lookChange();
@@ -310,40 +320,64 @@ public class MinecraftEnvironment {
         // LOGGER.debug("Calculating reward based on distance to goal: {}", info.distanceToGoal());
 
         // Positive is closer to goal, negative is further from goal
-        double deltaDistanceToGoal = info.distanceToGoal() - previousDistanceToGoal;
-        double reward = (deltaDistanceToGoal) * 10.0; // Reward based on distance to goal
+        double deltaDistanceToGoal = previousDistanceToGoal - info.distanceToGoal();
+        // double maxDistance = GRID_SIZE_XZ * 2;
+        // double proximityReward = (maxDistance - info.distanceToGoal()) / maxDistance;
+        double proximityReward = 1 / (info.distanceToGoal() + 1e-8);
+
+        double reward = deltaDistanceToGoal * 5.0 + proximityReward * 0.5;
         previousDistanceToGoal = info.distanceToGoal();
 
-        reward -= 0.05; // Small penalty for each step taken
-
+        // reward -= 0.05; // Small penalty for each step taken
+        // Hi Aidan, I hope youre having fun! - Allie
+        // Peepee poo poo - Theo
+        // "ctrl + A, backspace" - Ben
+        // Hi Aidan! Uhmmmm. LIVE IT UP ... in ... michigan - Eryn
         // LOGGER.debug("Current step: {}, Reward: {}", this.currentStep, reward);
 
         boolean terminated = false;
         if (info.distanceToGoal() < GOAL_THRESHOLD) {
             // LOGGER.debug("Goal reached! Distance to goal: {}", info.distanceToGoal());
-            reward += 100.0;
+            reward += 50.0;
             terminated = true;
         }
+
+        // System.out.println(reward);
 
         boolean truncated = this.currentStep > this.args.numSteps;
 
         // LOGGER.debug("Truncated step: {}", truncated);
 
 
-        environmentLog.addLine(Component.newline().append(
-            Component.text(" S: " + currentStep).color(NamedTextColor.YELLOW),
-            Component.newline(),
-            Component.text(" D: "),
-            Component.text(String.format("%.2f", info.distanceToGoal())),
-            Component.newline(),
-            Component.text("ΔD: "),
-            Component.text(String.format("%.2f", deltaDistanceToGoal))
-                .color(deltaDistanceToGoal > 0 ? NamedTextColor.GREEN : NamedTextColor.RED),
-            Component.newline(),
-            Component.text(" R: "),
-            Component.text(String.format("%.2f", reward))
-                .color(reward > 50 ? NamedTextColor.GOLD : reward > 0 ? NamedTextColor.GREEN : NamedTextColor.RED)
-        ));
+        // environmentLog.addLine(Component.newline().append(
+        //     Component.text(" S: " + currentStep).color(NamedTextColor.YELLOW),
+        //     Component.newline(),
+        //     Component.text(" D: "),
+        //     Component.text(String.format("%.2f", info.distanceToGoal())),
+        //     Component.newline(),
+        //     Component.text("ΔD: "),
+        //     Component.text(String.format("%.2f (%.2f)", deltaDistanceToGoal, deltaDistanceToGoal * 5.0))
+        //         .color(deltaDistanceToGoal > 0 ? NamedTextColor.GREEN : NamedTextColor.RED),
+        //     Component.newline(),
+        //     Component.text(" P: "),
+        //     Component.text(String.format("%.2f (%.2f)", proximityReward, proximityReward * 0.5)),
+        //     Component.newline(),
+        //     Component.text(" R: "),
+        //     Component.text(String.format("%.2f", reward))
+        //         .color(reward > 50 ? NamedTextColor.GOLD : reward > 0 ? NamedTextColor.GREEN : NamedTextColor.RED)
+        // ));
+
+        // new TextDisplayBuilder(roomLocation.getWorld())
+        //     .teleport(agent.position().multiply(1.0, 0.0, 1.0).add(0, 3 + currentStep / 1000.0, 0))
+        //     // Left quaternion and right quaternion. Need to rotate the text display to face directly up (ie around the x axis 90 degrees)
+        //     .text(String.format("%.2f", reward))
+        //     .billboard(Display.Billboard.CENTER);
+
+        // System.out.println(agent.position().x() + ", " +
+        //     agent.position().z() + ", " +
+        //     String.format("%.5f", info.distanceToGoal()) + ", " +
+        //     String.format("%.5f", deltaDistanceToGoal) + ", " +
+        //     String.format("%.5f", reward));
 
 
         return new StepResult(getObservation(), reward, terminated, truncated, info);

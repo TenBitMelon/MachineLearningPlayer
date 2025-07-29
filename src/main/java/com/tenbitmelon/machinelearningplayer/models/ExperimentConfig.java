@@ -26,11 +26,11 @@ public class ExperimentConfig {
     /**
      * The number of mini-batches.
      */
-    public final int numMinibatches = 8;
+    public final int numMinibatches = 16;
     /**
      * The K epochs to update the policy.
      */
-    public final int updateEpochs = 4;
+    public final int updateEpochs = 2;
     /**
      * Toggles advantages normalization.
      */
@@ -50,7 +50,7 @@ public class ExperimentConfig {
     /**
      * Coefficient of the value function.
      */
-    public final float vfCoef = 0.7f;
+    public final float vfCoef = 0.8f;
     /**
      * The maximum norm for the gradient clipping.
      */
@@ -62,7 +62,7 @@ public class ExperimentConfig {
     /**
      * The number of steps to run in each environment per policy rollout.
      */
-    public int numSteps = 260;
+    public int numSteps = 260; // TODO: Use more steps and more batches to decrease the cpu:gpu time ratio. Might need to up the batch size.
     /**
      * The batch size (computed in runtime, e.g., numEnvs * numSteps).
      * Initialized to 0 or a sensible default, will be calculated later.
@@ -72,6 +72,10 @@ public class ExperimentConfig {
      * The number of iterations to run. One iteration is numEnvs * numSteps steps.
      */
     public int numIterations = 5000;
+    /**
+     * The checkpoint to start from.
+     */
+    public Integer startingCheckpoint = null;
 
     private ExperimentConfig() {}
 

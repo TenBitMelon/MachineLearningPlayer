@@ -32,7 +32,7 @@ public class TrainingLogger {
             String filePath = logDir + "/" + experimentId + ".csv";
             this.writer = new BufferedWriter(new FileWriter(filePath, true));
 
-            writer.write("timestamp,global_step,learning_rate,value_loss,policy_loss,entropy,old_approx_kl,approx_kl,clipfrac,explained_variance,epoch_time,SPS\n");
+            writer.write("timestamp,iteration,learning_rate,value_loss,policy_loss,entropy,old_approx_kl,approx_kl,clipfrac,explained_variance,iteration_time,SPS,num_truncations,average_rewards\n");
             writer.flush();
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -40,14 +40,14 @@ public class TrainingLogger {
     }
 
 
-    public void logStep(long globalStep, double learningRate, double valueLoss, double policyLoss, double entropy,
-                        Double oldApproxKl, Double approxKl, double clipfrac, double explainedVariance, double epochTime, double sps) throws IOException {
+    public void logStep(long iteration, double learningRate, double valueLoss, double policyLoss, double entropy,
+                        Double oldApproxKl, Double approxKl, double clipfrac, double explainedVariance, double iterationTime, double sps, int numTerminations, double averageRewards) throws IOException {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        writer.write(String.format("%s,%d,%.6f,%.6f,%.6f,%.6f,%s,%s,%.6f,%.6f,%.6f,%.6f\n",
-            timestamp, globalStep, learningRate, valueLoss, policyLoss, entropy,
+        writer.write(String.format("%s,%d,%.6f,%.6f,%.6f,%.6f,%s,%s,%.6f,%.6f,%.6f,%.6f,%d,%.6f\n",
+            timestamp, iteration, learningRate, valueLoss, policyLoss, entropy,
             oldApproxKl != null ? String.format("%.6f", oldApproxKl) : "",
             approxKl != null ? String.format("%.6f", approxKl) : "",
-            clipfrac, explainedVariance, epochTime, sps));
+            clipfrac, explainedVariance, iterationTime, sps, numTerminations, averageRewards));
         writer.flush();
     }
 

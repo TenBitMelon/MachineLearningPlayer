@@ -30,6 +30,7 @@ public class Action {
 
     public Action(Tensor data) {
         this.data = data;
+
         this.cachedData = data
             .data_ptr_float();
     }

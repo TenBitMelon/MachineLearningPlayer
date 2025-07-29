@@ -31,6 +31,16 @@ public class MachineLearningCommand {
                 ctx.getSource().getSender().sendPlainMessage("[STATS]");
                 return Command.SINGLE_SUCCESS;
             })
+            .then(Commands.literal("sprint").executes(ctx -> {
+                TrainingManager.sprint = !TrainingManager.sprint;
+                ctx.getSource().getSender().sendPlainMessage("Sprint mode " + (TrainingManager.sprint ? "enabled" : "disabled"));
+                return Command.SINGLE_SUCCESS;
+            }))
+            .then(Commands.literal("runTraining").executes(ctx -> {
+                TrainingManager.runTraining = !TrainingManager.runTraining;
+                ctx.getSource().getSender().sendPlainMessage("Run training " + (TrainingManager.runTraining ? "enabled" : "disabled"));
+                return Command.SINGLE_SUCCESS;
+            }))
             .then(Commands.literal("clearUiCallbacks").executes(ctx -> {
                 ClickCallbackProviderImpl.CallbackManager callbackManager = ClickCallbackProviderImpl.CALLBACK_MANAGER;
 

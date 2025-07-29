@@ -6,6 +6,8 @@ import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
+import java.util.Arrays;
+
 public record VectorStepResult(Observation[] observations, double[] rewards, boolean[] terminated,
                                boolean[] truncated, Info[] infos) {
     public int[] logicalOrTerminationsAndTruncations() {
@@ -34,5 +36,25 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
         }
         return torch.stack(tensorVector, 0);  // Stack along batch dimension
 
+    }
+
+    public int numTruncations() {
+        int count = 0;
+        for (boolean truncated : truncated) {
+            if (truncated) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public int numTerminations() {
+        int count = 0;
+        for (boolean terminated : terminated) {
+            if (terminated) {
+                count++;
+            }
+        }
+        return count;
     }
 }
