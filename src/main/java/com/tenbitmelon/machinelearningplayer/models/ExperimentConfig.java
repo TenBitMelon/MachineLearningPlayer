@@ -30,7 +30,7 @@ public class ExperimentConfig {
     /**
      * The K epochs to update the policy.
      */
-    public final int updateEpochs = 2;
+    public final int updateEpochs = 8;
     /**
      * Toggles advantages normalization.
      */
@@ -46,11 +46,11 @@ public class ExperimentConfig {
     /**
      * Coefficient of the entropy.
      */
-    public final float entCoef = 0.005f;
+    public final float entCoef = 0.01f;
     /**
      * Coefficient of the value function.
      */
-    public final float vfCoef = 0.8f;
+    public final float vfCoef = 0.5f;
     /**
      * The maximum norm for the gradient clipping.
      */

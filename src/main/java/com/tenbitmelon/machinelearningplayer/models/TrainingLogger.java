@@ -53,9 +53,10 @@ public class TrainingLogger {
 
     public void close() {
         try {
-            writer.close();
+            if (writer != null)
+                writer.close();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            System.err.println("Failed to close the writer");
         }
     }
 }

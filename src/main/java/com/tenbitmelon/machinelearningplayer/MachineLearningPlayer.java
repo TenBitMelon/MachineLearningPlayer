@@ -18,6 +18,7 @@ import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bytedeco.javacpp.Loader;
+import org.bytedeco.openblas.global.openblas;
 import org.bytedeco.pytorch.Device;
 import org.bytedeco.pytorch.global.torch;
 import org.bytedeco.pytorch.presets.torch_cuda;
@@ -43,6 +44,19 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
     @Override
     public void onEnable() {
         System.setProperty("org.bytedeco.openblas.load", "mkl");
+        System.out.println("org.bytedeco.openblas.global.openblas.blas_get_num_threads() = " + openblas.blas_get_num_threads());
+
+        //     val a = doubleArrayOf(1.0, 2.0, 3.0, 4.0)
+        //     val ipiv = IntArray(2)
+        //     val n = 2
+        //     val lda = 2
+        //     val info = openblas.LAPACKE_dgetrf(
+        //         openblas.LAPACK_ROW_MAJOR, n, n,
+        //         DoublePointer(*a), lda, ipiv
+        // )
+        int info = openblas.LAPACKE_dgetrf(openblas.LAPACK_ROW_MAJOR, 2, 2, new double[]{1.0, 2.0, 3.0, 4.0}, 2, new int[]{0, 0});
+        System.out.println("openblas.LAPACKE_dgetrf() info = " + info);
+
         // loadExternalDependencies();
 
 

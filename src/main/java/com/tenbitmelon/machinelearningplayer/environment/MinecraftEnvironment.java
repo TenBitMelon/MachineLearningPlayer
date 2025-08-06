@@ -5,8 +5,6 @@ import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.util.TextDisplayBuilder;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
@@ -16,20 +14,18 @@ import org.bukkit.entity.Display;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.util.BoundingBox;
 import org.bytedeco.pytorch.Tensor;
-import org.bytedeco.pytorch.TensorOptions;
 import org.bytedeco.pytorch.global.torch;
-import org.joml.AxisAngle4f;
-import org.joml.Quaternionf;
 
 import java.util.concurrent.CompletableFuture;
 
 import static com.tenbitmelon.machinelearningplayer.util.Utils.szudzikUnpairing;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class MinecraftEnvironment {
 
     public static final int GRID_SIZE_XZ = 5;
+    public static final int HALF_GRID_SIZE_XZ = GRID_SIZE_XZ / 2;
     public static final int GRID_SIZE_Y = 5;
+    public static final int HALF_GRID_SIZE_Y = GRID_SIZE_Y / 2;
     public static final int GRID_VOLUME = GRID_SIZE_XZ * GRID_SIZE_XZ * GRID_SIZE_Y;
 
     public static final double GOAL_THRESHOLD = 0.75;
@@ -178,16 +174,21 @@ public class MinecraftEnvironment {
                 }
             }
         }*/
-        for (int y = -GRID_SIZE_Y / 2; y <= GRID_SIZE_Y / 2; y++) {
-            for (int x = -GRID_SIZE_XZ / 2; x <= GRID_SIZE_XZ / 2; x++) {
-                for (int z = -GRID_SIZE_XZ / 2; z <= GRID_SIZE_XZ / 2; z++) {
-                    // new TextDisplayBuilder(roomLocation.getWorld())
-                    //     .text(offset++ + "").build().teleport(new Location(world, position.x() + x, position.y() + y, position.z() + z));
+
+        for (int x = -HALF_GRID_SIZE_XZ; x < HALF_GRID_SIZE_XZ; x++) {
+            for (int z = -HALF_GRID_SIZE_XZ; z < HALF_GRID_SIZE_XZ; z++) {
+                for (int y = -HALF_GRID_SIZE_Y; y < HALF_GRID_SIZE_Y; y++) {
 
                     int index = offset++;
-                    if (offset < 50) {
-                        observationData[index] = 1.0f;
+                    if (y < 0) {
+                        observationData[index] = 0.5f;
+                        // TODO: Adapt this when the goal eventually has different y positions
+                    } else if (goalPosition != null && (int) (position.x() + x) == (int) (goalPosition.x) && (int) (position.y() + y) == (int) (goalPosition.y) && (int) (position.z() + z) == (int) (goalPosition.z)) {
+                        observationData[index] = 1f;
                     }
+
+                    // new TextDisplayBuilder(roomLocation.getWorld())
+                    //     .text(observationData[index] + " " + index).build().teleport(new Location(world, position.x() + x, position.y() + y, position.z() + z));
                 }
             }
         }
@@ -274,16 +275,18 @@ public class MinecraftEnvironment {
 
         // LOGGER.debug("Current step: {}, Action: {}", this.currentStep, tensorString(action.data));
 
+        agent.actionPack.stopAll();
+
         this.currentStep++;
 
         // LOGGER.debug("Updating agent action pack with action before: {}", agent.actionPack);
-        if (action.sneaking() == 1) {
-            agent.actionPack.setSneaking(true);
-        } else {
+        boolean sneaking = action.sneaking() == 1;
+        agent.actionPack.setSneaking(sneaking);
+        if (!sneaking) {
             agent.actionPack.setSprinting(action.sprinting() == 1);
         }
         if (action.jumping() == 1) {
-            // agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
+            agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
         }
 
         Vec2 rotation = action.lookChange();
@@ -321,24 +324,28 @@ public class MinecraftEnvironment {
 
         // Positive is closer to goal, negative is further from goal
         double deltaDistanceToGoal = previousDistanceToGoal - info.distanceToGoal();
-        // double maxDistance = GRID_SIZE_XZ * 2;
-        // double proximityReward = (maxDistance - info.distanceToGoal()) / maxDistance;
-        double proximityReward = 1 / (info.distanceToGoal() + 1e-8);
+        double reward = deltaDistanceToGoal * 5.0;
 
-        double reward = deltaDistanceToGoal * 5.0 + proximityReward * 0.5;
-        previousDistanceToGoal = info.distanceToGoal();
+        double maxDistance = GRID_SIZE_XZ * 2;
+        double proximityReward = Math.max(0, (maxDistance - info.distanceToGoal()) / maxDistance) * 0.1;
+        reward += proximityReward;
+
+        // double reward = deltaDistanceToGoal * 5.0 + proximityReward * 0.5;
+        // previousDistanceToGoal = info.distanceToGoal();
+        // double reward = -info.distanceToGoal();
 
         // reward -= 0.05; // Small penalty for each step taken
         // Hi Aidan, I hope youre having fun! - Allie
         // Peepee poo poo - Theo
         // "ctrl + A, backspace" - Ben
         // Hi Aidan! Uhmmmm. LIVE IT UP ... in ... michigan - Eryn
+
+        // thank you everyone! y’all are amazing
         // LOGGER.debug("Current step: {}, Reward: {}", this.currentStep, reward);
 
         boolean terminated = false;
         if (info.distanceToGoal() < GOAL_THRESHOLD) {
-            // LOGGER.debug("Goal reached! Distance to goal: {}", info.distanceToGoal());
-            reward += 50.0;
+            reward += 10.0;
             terminated = true;
         }
 

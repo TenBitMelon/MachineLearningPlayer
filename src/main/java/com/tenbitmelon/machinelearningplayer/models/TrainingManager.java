@@ -15,6 +15,7 @@ import org.bytedeco.pytorch.global.torch;
 import java.util.ArrayList;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class TrainingManager {
 
@@ -142,7 +143,8 @@ public class TrainingManager {
     }
 
     public static void shutdown() {
-        trainingLogger.close();
+        if (trainingLogger != null)
+            trainingLogger.close();
     }
 
     // Placeholder for future implementation
@@ -180,6 +182,8 @@ public class TrainingManager {
         } else {
             Bukkit.getServerTickManager().stopSprinting();
         }
+
+        // TODO: do observations every 2 ticks instead of every tick
 
 
         if (!runningInnerLoop) {
@@ -371,8 +375,8 @@ public class TrainingManager {
 
         AutogradState.get_tls_state().set_grad_mode(false);
 
-        Tensor value = model.getValue(nextObs, nextLstmState, nextDone);
-        value = value.reshape(-1);
+        Tensor nextValue = model.getValue(nextObs, nextLstmState, nextDone);
+        nextValue = nextValue.reshape(-1);
 
         advantages.zero_();
         Tensor lastGAELam = null;
@@ -382,7 +386,7 @@ public class TrainingManager {
             Tensor nextValues;
             if (t == args.numSteps - 1) {
                 nextNonTerminal = onesLikeNumEnvs.sub(nextDone);
-                nextValues = value;
+                nextValues = nextValue;
             } else {
                 nextNonTerminal = onesLikeNumEnvs.sub(dones.get(t + 1));
                 nextValues = values.get(t + 1);
@@ -390,7 +394,11 @@ public class TrainingManager {
             // delta = (
             //     rewards[t] + args.gamma * nextvalues * nextnonterminal - values[t]
             // )
-            Tensor delta = rewards.get(t).add(nextValues.mul(nextNonTerminal)).sub(values.get(t));
+            Tensor delta = rewards.get(t)
+                .add(
+                    nextValues.mul(nextNonTerminal).mul(new Scalar(args.gamma))
+                )
+                .sub(values.get(t));
 
             /// Everthing above here can be vectorized if neeeded
 
@@ -439,7 +447,7 @@ public class TrainingManager {
 
         int envsPerBatch = args.numEnvs / args.numMinibatches;
         Tensor envinds = torch.arange(new Scalar(args.numEnvs)).cuda();
-        Tensor flatinds = torch.arange(new Scalar(args.batchSize)).reshape(args.numEnvs, args.numSteps).cuda();
+        Tensor flatinds = torch.arange(new Scalar(args.batchSize)).reshape(args.numSteps, args.numEnvs).cuda();
 
             /*
             clipfracs = []
