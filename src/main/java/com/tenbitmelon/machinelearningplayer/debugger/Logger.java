@@ -1,9 +1,13 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
+import org.bytedeco.pytorch.cuda.DeviceStats;
+import org.bytedeco.pytorch.global.torch_cuda;
 import org.slf4j.event.Level;
 
 import java.util.Arrays;
 import java.util.HashMap;
+
+import static com.tenbitmelon.machinelearningplayer.models.TrainingManager.device;
 
 public class Logger {
 
@@ -37,6 +41,16 @@ public class Logger {
         if (enabledLevels.getOrDefault(level, false)) {
             System.out.printf("[%s] %s%n", level.name(), format(message, args));
         }
+    }
+
+    public void memory() {
+        // StackTraceElement stackTraceElement = Thread.currentThread().getStackTrace()[2];
+        // DeviceStats deviceStats = torch_cuda.getAllocator().getDeviceStats(device.index());
+        // log(Level.INFO, "{},{},{}",
+        //     System.currentTimeMillis(),
+        //     stackTraceElement.getLineNumber(),
+        //     deviceStats.allocated_bytes().current()
+        // );
     }
 
     public void debug(String message, Object... args) {

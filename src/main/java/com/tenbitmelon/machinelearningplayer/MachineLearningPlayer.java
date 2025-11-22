@@ -35,15 +35,29 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
     public static Logger LOGGER = null;
 
     static {
+        System.setProperty("org.bytedeco.javacpp.pathsFirst", "true");
+        // System.setProperty("org.bytedeco.javacpp.logger.debug", "true");
+        // System.setProperty("org.bytedeco.javacpp.logger.level", "debug");
+        // Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
+
+        // System.setProperty("org.bytedeco.javacpp.logger.debug", "true");
+        // System.setProperty("org.bytedeco.javacpp.logger.level", "debug");
+        // System.setProperty("org.bytedeco.openblas.load", "mkl");
+        //
         Loader.load(org.bytedeco.javacpp.presets.javacpp.class);
         Loader.load(org.bytedeco.openblas.presets.openblas.class);
+        Loader.load(org.bytedeco.cuda.presets.cupti.class);
+        Loader.load(org.bytedeco.cuda.presets.cudnn.class);
         Loader.load(org.bytedeco.pytorch.presets.torch.class);
-        // Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
+        Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
     }
 
     @Override
     public void onEnable() {
-        System.setProperty("org.bytedeco.openblas.load", "mkl");
+        // System.setProperty("org.bytedeco.javacpp.logger.debug", "true");
+        // System.setProperty("org.bytedeco.javacpp.logger.level", "debug");
+        // System.setProperty("org.bytedeco.openblas.load", "mkl");
+
         System.out.println("org.bytedeco.openblas.global.openblas.blas_get_num_threads() = " + openblas.blas_get_num_threads());
 
         //     val a = doubleArrayOf(1.0, 2.0, 3.0, 4.0)
@@ -71,12 +85,16 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
 
 
         // try {
-        //     Loader.load(org.bytedeco.pytorch.presets.torch.class);
+        //     // Loader.load(org.bytedeco.cuda.presets.cupti.class);
+        //     // Loader.load(org.bytedeco.cuda.presets.cudnn.class);
+        //     // Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
         // } catch (UnsatisfiedLinkError e) {
         //     String path = null;
         //     try {
-        //         path = Loader.cacheResource(org.bytedeco.pytorch.presets.torch.class, "windows-x86_64/jnitorch.dll").getPath();
-        //         new ProcessBuilder("C:/Users/Aidan/Downloads/Dependencies_x64_Release/DependenciesGui.exe", path).start().waitFor();
+        //         // path = Loader.cacheResource(org.bytedeco.cuda.presets.cupti.class, "windows-x86_64/jnicupti.dll").getPath();
+        //         // path = Loader.cacheResource(org.bytedeco.cuda.presets.cudnn.class, "windows-x86_64/jnicudnn.dll").getPath();
+        //         // path = Loader.cacheResource(org.bytedeco.pytorch.presets.torch_cuda.class, "windows-x86_64-gpu/jnitorch_cuda.dll").getPath();
+        //         new ProcessBuilder("C:/Program Files/Dependencies_x64_Release/DependenciesGui.exe", path).start().waitFor();
         //     } catch (InterruptedException | IOException ex) {
         //         throw new RuntimeException(ex);
         //     }

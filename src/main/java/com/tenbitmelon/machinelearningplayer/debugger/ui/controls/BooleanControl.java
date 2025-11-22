@@ -23,7 +23,7 @@ public class BooleanControl extends Control {
             .clickEvent(ClickEvent.callback((audience) -> {
                 boolean currentValue = getter.get();
                 setter.accept(!currentValue);
-                System.out.println("BooleanControl clicked, new value: " + !currentValue);
+                // System.out.println("BooleanControl clicked, new value: " + !currentValue);
             }));
     }
 }

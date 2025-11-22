@@ -7,21 +7,26 @@ import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.CounterControl
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import com.tenbitmelon.machinelearningplayer.environment.Action;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
+import com.tenbitmelon.machinelearningplayer.util.GatherFunction;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.pytorch.*;
+import org.bytedeco.pytorch.cuda.AllocatorTraceTracker;
+import org.bytedeco.pytorch.cuda.CUDAAllocator;
+import org.bytedeco.pytorch.cuda.DeviceStats;
 import org.bytedeco.pytorch.global.torch;
+import org.bytedeco.pytorch.global.torch_cuda;
 
 import java.util.ArrayList;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class TrainingManager {
 
     static public boolean runTraining = false;
     static public boolean sprint = false;
-
+    public static Device device;
     static ExperimentConfig args;
     static SyncedVectorEnvironment environment;
     static MinecraftRL model;
@@ -30,13 +35,12 @@ public class TrainingManager {
     static VectorResetResult resetResult;
     static AdamWOptions adamOptions;
     static AdamW optimizer;
-
     static long iterationStartTime = System.currentTimeMillis();
     static int iteration = 1;
     static int step = 0;
-    static Device device;
     static String logText = "";
     static TrainingLogger trainingLogger;
+    static CUDAAllocator allocator;
 
     /** Shape: [numEnvs, Observation.OBSERVATION_SPACE_SIZE] */
     private static Tensor nextObs;
@@ -75,6 +79,7 @@ public class TrainingManager {
         model.loadCheckpoint(args.startingCheckpoint);
         device = new Device("cuda:0");
         model.to(device, false);
+        LOGGER.memory();
 
         trainingLogger = new TrainingLogger(args, "logs/training");
 
@@ -84,11 +89,25 @@ public class TrainingManager {
         System.out.println("torch.cuda_is_available() = " + torch.cuda_is_available());
         System.out.println("torch.cuda_device_count() = " + torch.cuda_device_count());
         System.out.println("torch.hasCUDA() = " + torch.hasCUDA());
+        // Get GPU memory
+        allocator = torch_cuda.getAllocator();
+        System.out.println("allocator.isHistoryEnabled() = " + allocator.isHistoryEnabled());
+        // allocator.snapshot();
+        DeviceStats deviceStats = torch_cuda.getAllocator().getDeviceStats(device.index());
+        System.out.println("deviceStats.allocation().allocated() = " + deviceStats.allocation().allocated());
+        System.out.println("deviceStats.allocation().current() = " + deviceStats.allocation().current());
+        System.out.println("deviceStats.allocation().freed() = " + deviceStats.allocation().freed());
+        System.out.println("deviceStats.allocation().peak() = " + deviceStats.allocation().peak());
+        System.out.println("deviceStats.allocated_bytes().allocated() = " + deviceStats.allocated_bytes().allocated());
+        System.out.println("deviceStats.allocated_bytes().current() = " + deviceStats.allocated_bytes().current());
+        System.out.println("deviceStats.allocated_bytes().freed() = " + deviceStats.allocated_bytes().freed());
+        System.out.println("deviceStats.allocated_bytes().peak() = " + deviceStats.allocated_bytes().peak());
 
         nextLstmState = new MinecraftRL.LSTMState(
             torch.zeros(model.getLSTMLayers(), args.numEnvs, model.lstmHiddenSize).cuda(),
             torch.zeros(model.getLSTMLayers(), args.numEnvs, model.lstmHiddenSize).cuda());
-        // LOGGER.debug("Initial LSTM state created. Hidden shape: {}, Cell shape: {}", nextLstmState.hiddenState().shape(), nextLstmState.cellState().shape());
+        LOGGER.memory();
+        // LOGGER.debug("Initial LSTM state created. Hidzzden shape: {}, Cell shape: {}", nextLstmState.hiddenState().shape(), nextLstmState.cellState().shape());
 
         // TODO: torch.cuda.amp.autocast for mixed precision training
         // TODO: gradient scaling
@@ -99,9 +118,11 @@ public class TrainingManager {
         adamOptions = new AdamWOptions(args.learningRate);
         optimizer = new AdamW(model.parameters(), adamOptions);
         adamOptions.eps().put(1e-7);
+        LOGGER.memory();
         // LOGGER.debug("Adam optimizer initialized with learning rate: {}", args.learningRate);
 
         nextDone = torch.zeros(args.numEnvs).cuda();
+        LOGGER.memory();
         // LOGGER.debug("Initial 'nextDone' tensor created. Shape: {}", nextDone.shape());
 
         // TODO: Use pinned memory for a lot of this
@@ -111,11 +132,13 @@ public class TrainingManager {
         rewards = torch.zeros(args.numSteps, args.numEnvs).cuda();
         dones = torch.zeros(args.numSteps, args.numEnvs).cuda();
         values = torch.zeros(args.numSteps, args.numEnvs).cuda();
+        LOGGER.memory();
         // LOGGER.debug("Storage tensors initialized. Shape (e.g., observations): {}", observations.shape());
 
         advantages = torch.zeros(args.numSteps, args.numEnvs).cuda();
         zerosLikeNumEnvs = torch.zeros(args.numEnvs).cuda();
         onesLikeNumEnvs = torch.ones(args.numEnvs).cuda();
+        LOGGER.memory();
 
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text(""), () -> logText));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Env. Ready"), () -> environment.isReady()));
@@ -168,15 +191,15 @@ public class TrainingManager {
             // Log
             // LOGGER.debug("Environment reset complete. Observations shape: {}, Infos length: {}", resetObservations.shape(), resetResult.infos().length);
             // LOGGER.debug("Initial observations: {}", tensorString(resetObservations));
-
             nextObs = resetResult.observationsTensor().cuda();
             System.out.println("nextObs.device().type() = " + nextObs.device().type());
+            LOGGER.memory();
             // LOGGER.debug("Environment reset complete. Initial observation shape: {}", nextObs.shape());
 
 
         }
 
-
+        LOGGER.memory();
         if (sprint) {
             Bukkit.getServerTickManager().requestGameToSprint(200);
         } else {
@@ -186,15 +209,21 @@ public class TrainingManager {
         // TODO: do observations every 2 ticks instead of every tick
 
 
+        LOGGER.memory();
         if (!runningInnerLoop) {
             epochSetup();
+            LOGGER.memory();
             if (!runTraining) return;
         }
+        LOGGER.memory();
         runPostTickStep();
+        LOGGER.memory();
         runPreTickStep();
+        LOGGER.memory();
     }
 
     public static void epochSetup() {
+        LOGGER.memory();
         // LOGGER.info("==================== Starting Epoch Setup for Iteration: {} ====================", iteration);
         logText = "Epoch Setup...";
 
@@ -217,6 +246,7 @@ public class TrainingManager {
             initial_lstm_state = (next_lstm_state[0].clone(), next_lstm_state[1].clone())
              */
         initialLSTMState = nextLstmState.clone();
+        LOGGER.memory();
         // LOGGER.debug("Cloned LSTM state for the new epoch.");
 
             /*
@@ -231,9 +261,11 @@ public class TrainingManager {
             optimizer.param_groups().get(0).options().set_lr(lrNow);
             // LOGGER.debug("Annealed learning rate for iteration {}: {}", iteration, lrNow);
         }
+        LOGGER.memory();
     }
 
     public static void runPreTickStep() {
+        LOGGER.memory();
         // LOGGER.debug("[===] Running steps for iteration {}, step {}", iteration, step);
         logText = "Run Steps...";
 
@@ -260,6 +292,7 @@ public class TrainingManager {
         // LOGGER.debug("Observations after storing: {}", tensorString(observations));
         observations.get(step).copy_(nextObs);
         dones.get(step).copy_(nextDone);
+        LOGGER.memory();
         // LOGGER.debug("[Step {}] Stored next_obs (shape: {}) and next_done (shape: {})", step, nextObs.shape(), nextDone.shape());
 
                 /*
@@ -278,9 +311,11 @@ public class TrainingManager {
         MinecraftRL.ActionAndValue actionResult = model.getActionAndValue(nextObs, nextLstmState, nextDone);
         values.get(step).copy_(actionResult.value().flatten());
         AutogradState.get_tls_state().set_grad_mode(true);
+        LOGGER.memory();
 
         actions.get(step).copy_(actionResult.action());
         logprobs.get(step).copy_(actionResult.totalLogProbs());
+        LOGGER.memory();
         // LOGGER.debug("[Step {}] Stored values (shape: {}), actions (shape: {}), logprobs (shape: {})", step, values.get(step).shape(), actions.get(step).shape(), logprobs.get(step).shape());
 
                 /*
@@ -299,11 +334,13 @@ public class TrainingManager {
         Tensor actionTensor = actionResult.action().cpu();
         environment.preTickStep(actionTensor);
         needsPostTickStep = true;
+        LOGGER.memory();
     }
 
-    ///  INSERT A SERVER TICK HERE !!! AHHHH
+    ///  A server tick happens between these functions
 
     public static void runPostTickStep() {
+        LOGGER.memory();
         if (!needsPostTickStep) {
             LOGGER.warn("runPostTickStep called without a preTickStep. Skipping step.");
             return;
@@ -314,6 +351,7 @@ public class TrainingManager {
         rewards.get(step).copy_(Tensor.create(stepResult.rewards()).cuda());
         nextObs = stepResult.observationsTensor().cuda();
         numTerminations += stepResult.numTerminations();
+        LOGGER.memory();
         // LOGGER.debug("Next obs: {}", tensorString(nextObs));
         // LOGGER.debug("[Step {}] Environment step complete. New obs shape: {}, new rewards shape: {}, new done shape: {}", step, nextObs.shape(), rewards.get(step).shape(), nextDone.shape());
 
@@ -345,6 +383,7 @@ public class TrainingManager {
     }
 
     public static void finishEpoch() {
+        LOGGER.memory();
         logText = "Finish Epoch...";
 
 
@@ -377,9 +416,11 @@ public class TrainingManager {
 
         Tensor nextValue = model.getValue(nextObs, nextLstmState, nextDone);
         nextValue = nextValue.reshape(-1);
+        LOGGER.memory();
 
         advantages.zero_();
         Tensor lastGAELam = null;
+        LOGGER.memory();
 
         for (int t = args.numSteps - 1; t >= 0; t--) {
             Tensor nextNonTerminal;
@@ -412,10 +453,12 @@ public class TrainingManager {
             advantages.get(t).copy_(advantage);
             lastGAELam = advantage;
         }
+        LOGGER.memory();
 
         Tensor returns = advantages.add(values);
 
         AutogradState.get_tls_state().set_grad_mode(true);
+        LOGGER.memory();
 
             /*
             # flatten the batch
@@ -435,6 +478,7 @@ public class TrainingManager {
         Tensor bAdvantages = advantages.reshape(-1);
         Tensor bReturns = returns.reshape(-1);
         Tensor bValues = values.reshape(-1);
+        LOGGER.memory();
 
 
             /*
@@ -448,6 +492,7 @@ public class TrainingManager {
         int envsPerBatch = args.numEnvs / args.numMinibatches;
         Tensor envinds = torch.arange(new Scalar(args.numEnvs)).cuda();
         Tensor flatinds = torch.arange(new Scalar(args.batchSize)).reshape(args.numSteps, args.numEnvs).cuda();
+        LOGGER.memory();
 
             /*
             clipfracs = []
@@ -462,6 +507,7 @@ public class TrainingManager {
         Tensor entropyLoss = null;
         Tensor approxKl = null;
         Tensor oldApproxKl = null;
+        LOGGER.memory();
 
         for (int epoch = 0; epoch < args.updateEpochs; epoch++) {
 
@@ -489,6 +535,7 @@ public class TrainingManager {
                 // int[] mbenvinds = Arrays.copyOfRange(envinds, start, end);
 
                 Tensor mb_inds = flatinds.index_select(1, mbenvinds).ravel();
+                LOGGER.memory();
 
 
                 // int[] mb_inds = new int[args.numSteps * mbenvinds.length];
@@ -519,6 +566,7 @@ public class TrainingManager {
 
                 Tensor lstmStateHidden = initialLSTMState.hiddenState().index_select(1, mbenvinds);
                 Tensor lstmStateCell = initialLSTMState.cellState().index_select(1, mbenvinds);
+                LOGGER.memory();
 
                 Tensor bDones_mb_inds = bDones.index_select(0, mb_inds);
                 // Tensor bDonesMB = torch.zeros(mb_inds.length).cuda();
@@ -539,6 +587,7 @@ public class TrainingManager {
                     bDones_mb_inds,
                     bActions_mb_inds
                 );
+                LOGGER.memory();
 
 
                     /*
@@ -556,6 +605,7 @@ public class TrainingManager {
                 // }
                 // Tensor logratio = actionAndValueResult.totalLogProbs().sub(bLogProbsMB);
                 Tensor ratio = logRatio.exp();
+                LOGGER.memory();
 
                     /*
 
@@ -575,6 +625,7 @@ public class TrainingManager {
                 approxKl = ratio.sub(new Scalar(1.0)).sub(logRatio).mean();
                 Scalar item = ratio.sub(new Scalar(1.0)).abs().gt(new Scalar(args.clipCoef)).toType(torch.ScalarType.Float).mean().item();
                 clipFracs.add(item.toFloat());
+                LOGGER.memory();
 
                 AutogradState.get_tls_state().set_grad_mode(true);
 
@@ -599,6 +650,7 @@ public class TrainingManager {
                     Tensor std = mbAdvantages.std();
                     mbAdvantages = mbAdvantages.sub(mean).div(std.add(new Scalar(1e-8)));
                 }
+                LOGGER.memory();
 
                     /*
 
@@ -616,6 +668,7 @@ public class TrainingManager {
                     torch.clamp(ratio, new ScalarOptional(new Scalar(1.0 - args.clipCoef)), new ScalarOptional(new Scalar(1.0 + args.clipCoef)))
                 );
                 pgLoss = torch.max(pgLoss1, pgLoss2).mean();
+                LOGGER.memory();
 
                     /*
 
@@ -630,6 +683,7 @@ public class TrainingManager {
                 //     bReturnsMB.get(i).copy_(bReturns.get(mb_inds[i]));
                 // }
                 Tensor mbReturns = bReturns.index_select(0, mb_inds);
+                LOGGER.memory();
                 if (args.clipVloss) {
                         /*
                         v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
@@ -669,6 +723,7 @@ public class TrainingManager {
                          */
                     vLoss = newValue.sub(mbReturns).square().mean().mul(new Scalar(0.5));
                 }
+                LOGGER.memory();
 
                     /*
 
@@ -682,6 +737,7 @@ public class TrainingManager {
                 ).add(
                     vLoss.mul(new Scalar(args.vfCoef))
                 );
+                LOGGER.memory();
 
                     /*
 
@@ -692,10 +748,14 @@ public class TrainingManager {
                     */
 
                 optimizer.zero_grad();
+                LOGGER.memory();
                 loss.backward();
+                LOGGER.memory();
                 // Clip gradients
                 torch.clip_grad_norm_(model.parameters(), args.maxGradNorm);
+                LOGGER.memory();
                 optimizer.step();
+                LOGGER.memory();
             }
                     /*
 
@@ -717,6 +777,7 @@ public class TrainingManager {
         Tensor yTrue = bReturns;
         double varY = yTrue.var().item().toDouble();
         double explainedVar = varY == 0 ? Double.NaN : 1.0 - yTrue.sub(yPred).var().div(new Scalar(varY)).item().toDouble();
+        LOGGER.memory();
 
             /*
             writer.add_scalar(
@@ -766,10 +827,12 @@ public class TrainingManager {
         } catch (Exception e) {
             LOGGER.error("Failed to log training metrics: {}", e.getMessage());
         }
+        LOGGER.memory();
 
         iteration++;
 
         if (iteration % 200 == 0) {
+            // allocator.snapshot();
             model.saveCheckpoint(iteration);
         }
         // 17:49:52 20

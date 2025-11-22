@@ -19,6 +19,7 @@ import org.bytedeco.pytorch.global.torch;
 import java.util.concurrent.CompletableFuture;
 
 import static com.tenbitmelon.machinelearningplayer.util.Utils.szudzikUnpairing;
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class MinecraftEnvironment {
 
@@ -150,7 +151,6 @@ public class MinecraftEnvironment {
     public Observation getObservation() {
         // Observation observation = new Observation();
         float[] observationData = new float[Observation.OBSERVATION_SPACE_SIZE];
-        int offset = 0;
 
         // 1. Fill voxel grid data
         Vec3 position = agent.position();
@@ -175,17 +175,19 @@ public class MinecraftEnvironment {
             }
         }*/
 
+        int index = Observation.OFFSET_VOXEL_GRID;
         for (int x = -HALF_GRID_SIZE_XZ; x < HALF_GRID_SIZE_XZ; x++) {
             for (int z = -HALF_GRID_SIZE_XZ; z < HALF_GRID_SIZE_XZ; z++) {
                 for (int y = -HALF_GRID_SIZE_Y; y < HALF_GRID_SIZE_Y; y++) {
 
-                    int index = offset++;
                     if (y < 0) {
                         observationData[index] = 0.5f;
                         // TODO: Adapt this when the goal eventually has different y positions
                     } else if (goalPosition != null && (int) (position.x() + x) == (int) (goalPosition.x) && (int) (position.y() + y) == (int) (goalPosition.y) && (int) (position.z() + z) == (int) (goalPosition.z)) {
                         observationData[index] = 1f;
                     }
+
+                    index++;
 
                     // new TextDisplayBuilder(roomLocation.getWorld())
                     //     .text(observationData[index] + " " + index).build().teleport(new Location(world, position.x() + x, position.y() + y, position.z() + z));
@@ -194,38 +196,41 @@ public class MinecraftEnvironment {
         }
 
         // 2. Position in block (3 values)
-        observationData[offset++] = (float) (position.x() - (int) (position.x()));
-        observationData[offset++] = (float) (position.y() - (int) (position.y()));
-        observationData[offset++] = (float) (position.z() - (int) (position.z()));
+        observationData[Observation.OFFSET_POSITION_IN_BLOCK + 0] = (float) (position.x() - (int) (position.x()));
+        observationData[Observation.OFFSET_POSITION_IN_BLOCK + 1] = (float) (position.y() - (int) (position.y()));
+        observationData[Observation.OFFSET_POSITION_IN_BLOCK + 2] = (float) (position.z() - (int) (position.z()));
 
         // 3. Velocity (3 values)
         Vec3 agentVelocity = agent.getDeltaMovement();
-        observationData[offset++] = (float) agentVelocity.x();
-        observationData[offset++] = (float) agentVelocity.y();
-        observationData[offset++] = (float) agentVelocity.z();
+        observationData[Observation.OFFSET_VELOCITY + 0] = (float) agentVelocity.x();
+        observationData[Observation.OFFSET_VELOCITY + 1] = (float) agentVelocity.y();
+        observationData[Observation.OFFSET_VELOCITY + 2] = (float) agentVelocity.z();
 
         // 4. Look direction (3 values)
         Vec3 lookDirectionVec = agent.getLookAngle().normalize();
-        observationData[offset++] = (float) lookDirectionVec.x();
-        observationData[offset++] = (float) lookDirectionVec.y();
-        observationData[offset++] = (float) lookDirectionVec.z();
+        observationData[Observation.OFFSET_LOOK_DIRECTION + 0] = (float) lookDirectionVec.x();
+        observationData[Observation.OFFSET_LOOK_DIRECTION + 1] = (float) lookDirectionVec.y();
+        observationData[Observation.OFFSET_LOOK_DIRECTION + 2] = (float) lookDirectionVec.z();
 
         // 5. Boolean flags (4 values)
-        observationData[offset++] = agent.jumping ? 1.0f : 0.0f;
-        observationData[offset++] = agent.actionPack.sprinting ? 1.0f : 0.0f;
-        observationData[offset++] = agent.actionPack.sneaking ? 1.0f : 0.0f;
-        observationData[offset++] = agent.onGround ? 1.0f : 0.0f;
+        observationData[Observation.OFFSET_JUMPING] = agent.jumping ? 1.0f : 0.0f; // TODO: Remove this
+        observationData[Observation.OFFSET_SPRINTING] = agent.actionPack.sprinting ? 1.0f : 0.0f;
+        observationData[Observation.OFFSET_SNEAKING] = agent.actionPack.sneaking ? 1.0f : 0.0f;
+        observationData[Observation.OFFSET_ON_GROUND] = agent.onGround ? 1.0f : 0.0f;
 
         // 6. Goal direction (3 values)
         Vec3 goalDirectionVec = goalPosition.subtract(position).normalize();
-        observationData[offset++] = (float) goalDirectionVec.x;
-        observationData[offset++] = (float) goalDirectionVec.y;
-        observationData[offset++] = (float) goalDirectionVec.z;
+        observationData[Observation.OFFSET_GOAL_DIRECTION + 0] = (float) goalDirectionVec.x;
+        observationData[Observation.OFFSET_GOAL_DIRECTION + 1] = (float) goalDirectionVec.y;
+        observationData[Observation.OFFSET_GOAL_DIRECTION + 2] = (float) goalDirectionVec.z;
 
         // Single tensor operation to set all data at once
         // TODO: Construct on device
         // TODO: or reuse the observations [numEnvs, obsSize] tensor and insert this observation into it
-        Observation observation = new Observation(torch.tensor(observationData));
+        Tensor observationTensor = torch.tensor(observationData);
+        Observation observation = new Observation(observationTensor);
+
+        // System.out.println("Observation: " + tensorString(observationTensor));
 
         // Log the observation to the agent's debug log
         agent.displayObservation(observation);
@@ -289,7 +294,7 @@ public class MinecraftEnvironment {
             agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
         }
 
-        Vec2 rotation = action.lookChange();
+        Vec2 rotation = action.lookChange().scale(15.0f); // Scale to a reasonable rotation speed
         // LOGGER.debug("Setting agent rotation: [{}, {}]", rotation.x, rotation.y);
         agent.actionPack.turn(rotation);
 

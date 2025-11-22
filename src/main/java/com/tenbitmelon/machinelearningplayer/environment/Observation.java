@@ -5,25 +5,25 @@ import org.bytedeco.pytorch.global.torch;
 
 public class Observation {
 
-    private static final int SIZE_VOXEL_GRID = MinecraftEnvironment.GRID_VOLUME;
-    private static final int SIZE_POSITION_IN_BLOCK = 3;
-    private static final int SIZE_VELOCITY = 3;
-    private static final int SIZE_LOOK_DIRECTION = 3;
-    private static final int SIZE_JUMPING = 1;
-    private static final int SIZE_SPRINTING = 1;
-    private static final int SIZE_SNEAKING = 1;
-    private static final int SIZE_ON_GROUND = 1;
-    private static final int SIZE_GOAL_DIRECTION = 3;
+    public static final int SIZE_VOXEL_GRID = MinecraftEnvironment.GRID_VOLUME;
+    public static final int SIZE_POSITION_IN_BLOCK = 3;
+    public static final int SIZE_VELOCITY = 3;
+    public static final int SIZE_LOOK_DIRECTION = 3;
+    public static final int SIZE_JUMPING = 1;
+    public static final int SIZE_SPRINTING = 1;
+    public static final int SIZE_SNEAKING = 1;
+    public static final int SIZE_ON_GROUND = 1;
+    public static final int SIZE_GOAL_DIRECTION = 3;
 
-    private static final int OFFSET_VOXEL_GRID = 0;
-    private static final int OFFSET_POSITION_IN_BLOCK = OFFSET_VOXEL_GRID + SIZE_VOXEL_GRID;
-    private static final int OFFSET_VELOCITY = OFFSET_POSITION_IN_BLOCK + SIZE_POSITION_IN_BLOCK;
-    private static final int OFFSET_LOOK_DIRECTION = OFFSET_VELOCITY + SIZE_VELOCITY;
-    private static final int OFFSET_JUMPING = OFFSET_LOOK_DIRECTION + SIZE_LOOK_DIRECTION;
-    private static final int OFFSET_SPRINTING = OFFSET_JUMPING + SIZE_JUMPING;
-    private static final int OFFSET_SNEAKING = OFFSET_SPRINTING + SIZE_SPRINTING;
-    private static final int OFFSET_ON_GROUND = OFFSET_SNEAKING + SIZE_SNEAKING;
-    private static final int OFFSET_GOAL_DIRECTION = OFFSET_ON_GROUND + SIZE_ON_GROUND;
+    public static final int OFFSET_VOXEL_GRID = 0;
+    public static final int OFFSET_POSITION_IN_BLOCK = OFFSET_VOXEL_GRID + SIZE_VOXEL_GRID;
+    public static final int OFFSET_VELOCITY = OFFSET_POSITION_IN_BLOCK + SIZE_POSITION_IN_BLOCK;
+    public static final int OFFSET_LOOK_DIRECTION = OFFSET_VELOCITY + SIZE_VELOCITY;
+    public static final int OFFSET_JUMPING = OFFSET_LOOK_DIRECTION + SIZE_LOOK_DIRECTION;
+    public static final int OFFSET_SPRINTING = OFFSET_JUMPING + SIZE_JUMPING;
+    public static final int OFFSET_SNEAKING = OFFSET_SPRINTING + SIZE_SPRINTING;
+    public static final int OFFSET_ON_GROUND = OFFSET_SNEAKING + SIZE_SNEAKING;
+    public static final int OFFSET_GOAL_DIRECTION = OFFSET_ON_GROUND + SIZE_ON_GROUND;
 
     public static final int OBSERVATION_SPACE_SIZE = OFFSET_GOAL_DIRECTION + SIZE_GOAL_DIRECTION;
 

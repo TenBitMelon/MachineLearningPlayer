@@ -62,7 +62,7 @@ public class ExperimentConfig {
     /**
      * The number of steps to run in each environment per policy rollout.
      */
-    public int numSteps = 260; // TODO: Use more steps and more batches to decrease the cpu:gpu time ratio. Might need to up the batch size.
+    public int numSteps = 200; // TODOe: Use more steps and more batches to decrease the cpu:gpu time ratio. Might need to up the batch size.
     /**
      * The batch size (computed in runtime, e.g., numEnvs * numSteps).
      * Initialized to 0 or a sensible default, will be calculated later.

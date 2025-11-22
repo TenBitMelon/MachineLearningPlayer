@@ -14,6 +14,7 @@ import org.bytedeco.pytorch.global.torch;
 import javax.annotation.Nullable;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
@@ -50,13 +51,23 @@ public class MinecraftRL extends Module {
         )
          */
 
+        /*
+            Trying to simplify this
+            # Input: (B, 1, X, Z, Y)
+            layer_init(nn.Conv3d(1, 16, kernel_size=(3, 3, 3), stride=(1, 1, 1), padding=(1, 1, 1))), # Output Size: (B, 16, X, Z, Y)
+            nn.ReLU(),
+            layer_init(nn.Conv3d(16, 32, kernel_size=(3, 3, MinecraftEnvironment.GRID_SIZE_Y), stride=(1, 1, 1), padding=(1, 1, 0))), # Output Size: (B, 32, X, Z, Y)
+            nn.ReLU(),
+            nn.Flatten(), # Flatten the output to (B, 32 * X * Z * Y)
+         */
+
 
         final Conv3dImpl conv1 = createConv3d(1, 16, 3, 3, 3, 1, 1, 1, 1, 1, 1);
         final ReLUImpl relu = new ReLUImpl();
         final Conv3dImpl conv2 = createConv3d(16, 32, 3, 3, MinecraftEnvironment.GRID_SIZE_Y, 1, 1, 1, 1, 1, 0);
         final ReLUImpl relu2 = new ReLUImpl();
-        final Conv3dImpl conv3 = createConv3d(32, 64, 3, 3, 1, 2, 2, 1, 1, 1, 0);
-        final ReLUImpl relu3 = new ReLUImpl();
+        // final Conv3dImpl conv3 = createConv3d(32, 64, 3, 3, 1, 2, 2, 1, 1, 1, 0);
+        // final ReLUImpl relu3 = new ReLUImpl();
         final FlattenImpl flatten = new FlattenImpl();
 
         final SequentialImpl sequential = new SequentialImpl();
@@ -64,8 +75,8 @@ public class MinecraftRL extends Module {
         sequential.push_back("relu", relu);
         sequential.push_back("conv2", conv2);
         sequential.push_back("relu2", relu2);
-        sequential.push_back("conv3", conv3);
-        sequential.push_back("relu3", relu3);
+        // sequential.push_back("conv3", conv3);
+        // sequential.push_back("relu3", relu3);
         sequential.push_back("flatten", flatten);
 
         register_module("voxel_cnn", sequential);
@@ -182,14 +193,6 @@ public class MinecraftRL extends Module {
                 torch.constant_(param, new Scalar(0.0f));
             } else if (name.contains("weight")) {
                 orthogonal_(param, Math.sqrt(2.0));
-
-                System.out.println("  Has NaN: " + param.isnan().any().item().toBool());
-
-                // // Xavier/Glorot normal initialization ???
-                // double fanIn = lstm.options().input_size().get();
-                // double fanOut = lstm.options().hidden_size().get();
-                // double xavierStd = Math.sqrt(2.0 / (fanIn + fanOut));
-                // torch.normal_(param, 0.0, xavierStd);
             }
         }
 
@@ -265,10 +268,6 @@ public class MinecraftRL extends Module {
     }
 
     static void orthogonal_(Tensor tensor, double std) {
-        System.out.println("orthogonal_: Input tensor device: " + tensor.device().type().toString());
-        System.out.println("orthogonal_: Input tensor shape: " + Arrays.toString(tensor.shape()));
-        System.out.println("orthogonal_: Input tensor dtype: " + tensor.scalar_type());
-
         // if tensor.ndimension() < 2:
         //  raise ValueError("Only tensors with 2 or more dimensions are supported")
 
@@ -285,7 +284,6 @@ public class MinecraftRL extends Module {
         }
 
         Device originalDevice = tensor.device();
-        System.out.println("Original device: " + originalDevice.type().toString());
 
         // rows = tensor.size(0)
         // cols = tensor.numel() // rows
@@ -294,7 +292,6 @@ public class MinecraftRL extends Module {
         long rows = tensor.size(0);
         long cols = tensor.numel() / rows;
         Tensor flattened = torch.empty(rows, cols).normal_(0, 1, null);
-        System.out.println("Flattened tensor device: " + flattened.device().type().toString());
 
         // if rows < cols:
         //     flattened.t_()
@@ -304,7 +301,6 @@ public class MinecraftRL extends Module {
             long temp = rows;
             rows = cols;
             cols = temp;
-            System.out.println("Transposed: new shape " + rows + "x" + cols);
         }
 
         // # Compute the qr factorization
@@ -316,25 +312,18 @@ public class MinecraftRL extends Module {
 
 
         T_TensorTensor_T qr = linalg_qr(flattened);
-        System.out.println("QR completed successfully");
-        System.out.println("Q device: " + qr.get0().device().type().toString() + ", shape: " + Arrays.toString(qr.get0().shape()));
-        System.out.println("R device: " + qr.get1().device().type().toString() + ", shape: " + Arrays.toString(qr.get1().shape()));
 
         Tensor q = qr.get0();
         Tensor r = qr.get1();
         Tensor d = torch.diag(r, 0);
-        System.out.println("Diagonal device: " + d.device().type().toString());
         Tensor ph = d.sign();
-        System.out.println("Phase device: " + ph.device().type().toString());
         q = q.mul(ph); // Make Q uniform according to the paper
-        System.out.println("Q after phase correction device: " + q.device().type().toString());
 
         // if rows < cols:
         //     q.t_()
 
         if (rows < cols) {
             q = q.t(); // Transpose
-            System.out.println("Q after transpose device: " + q.device().type().toString());
         }
 
         // with torch.no_grad():
@@ -345,7 +334,6 @@ public class MinecraftRL extends Module {
 
         tensor.view_as(q).copy_(q); // Copy the orthogonal matrix to the tensor
         tensor.mul_(new Scalar(std)); // Scale the tensor by the standard deviation
-        System.out.println("orthogonal_: Completed successfully");
 
         AutogradState.get_tls_state().set_grad_mode(true);
 
@@ -353,39 +341,23 @@ public class MinecraftRL extends Module {
     }
 
     static T_TensorTensor_T linalg_qr(Tensor tensor) {
-        System.out.println("customQR: Input device: " + tensor.device().type().toString());
-        System.out.println("customQR: Input shape: " + Arrays.toString(tensor.shape()));
-        System.out.println("customQR: Input dtype: " + tensor.scalar_type());
-
         // Ensure tensor is contiguous and float precision
         Tensor a = tensor.contiguous();
-
-        System.out.println("customQR: Prepared tensor device: " + a.device().type().toString() + ", dtype: " + a.scalar_type());
 
         int m = (int) a.size(0);
         int n = (int) a.size(1);
         int k = Math.min(m, n);
 
-        System.out.println("customQR: Matrix dimensions m=" + m + ", n=" + n + ", k=" + k);
-
-
         // Get data pointer from PyTorch tensor
         FloatPointer aPtr = new FloatPointer(a.data_ptr());
-        System.out.println("customQR: Got data pointer");
         FloatPointer tau = new FloatPointer(k);
-
-        System.out.println("customQR: Allocated tau array");
 
 
         // Perform QR decomposition
         int info = openblas.LAPACKE_sgeqrf(openblas.LAPACK_ROW_MAJOR, m, n, aPtr, n, tau);
-        System.out.println("customQR: LAPACKE_sgeqrf returned info = " + info);
         if (info != 0) {
             throw new RuntimeException("LAPACKE_sgeqrf failed with info: " + info);
         }
-
-        // Values of the resulting matrix A after QR decomposition
-        System.out.println("customQR: A after QR decomposition: " + tensorString(a));
 
         // Extract R matrix (upper triangular part)
         Tensor r = torch.zeros(new long[]{k, n}, new TensorOptions(torch.ScalarType.Float));
@@ -397,30 +369,19 @@ public class MinecraftRL extends Module {
                 rPtr.put(i * n + j, aPtr.get(i * n + j));
             }
         }
-        System.out.println("customQR: Extracted R matrix");
-        System.out.println("customQR: R Matrix: " + tensorString(r));
-
         // Generate orthogonal matrix Q
         Tensor q = a.clone(); // Start with the modified input
         FloatPointer qPtr = new FloatPointer(q.data_ptr());
 
         info = openblas.LAPACKE_sorgqr(openblas.LAPACK_ROW_MAJOR, m, k, k, qPtr, k, tau);
-        System.out.println("customQR: LAPACKE_sorgqr returned info = " + info);
-        System.out.println("info2 = " + info);
         if (info != 0) {
             throw new RuntimeException("Q generation failed with info: " + info);
         }
-
-        System.out.println("customQR: Generated orthogonal matrix Q: " + tensorString(q));
 
         // Resize Q to proper dimensions if needed
         if (k < n) {
             q = q.narrow(1, 0, k); // Take only first k columns
         }
-
-        System.out.println("customQR: Final Q device: " + q.device().type().toString() + ", shape: " + Arrays.toString(q.shape()));
-        System.out.println("customQR: Final R device: " + r.device().type().toString() + ", shape: " + Arrays.toString(r.shape()));
-
 
         return new T_TensorTensor_T(q, r);
 
@@ -429,25 +390,7 @@ public class MinecraftRL extends Module {
     static LinearImpl createLinearLayer(long inputsDim, long outputDims, double std) {
         LinearImpl layer = new LinearImpl(inputsDim, outputDims);
 
-        System.out.println("tensorString(layer.weight()) = " + tensorString(layer.weight()));
-
         orthogonal_(layer.weight(), std);
-
-        System.out.println("tensorString(layer.weight()) = " + tensorString(layer.weight()));
-
-        System.out.println("After custom orthogonal_:");
-        System.out.println("  Min: " + layer.weight().min().item().toFloat());
-        System.out.println("  Max: " + layer.weight().max().item().toFloat());
-        System.out.println("  Mean: " + layer.weight().mean().item().toFloat());
-        System.out.println("  Std: " + layer.weight().std().item().toFloat());
-        System.out.println("  Has NaN: " + layer.weight().isnan().any().item().toBool());
-        System.out.println("  Has Inf: " + layer.weight().isinf().any().item().toBool());
-
-
-        // // Xavier/Glorot normal initialization ???
-        // double xavier_std = Math.sqrt(2.0 / ((double) inputsDim + (double) outputDims)) * std;
-        // torch.normal_(layer.weight(), 0.0, xavier_std);
-
         torch.constant_(layer.bias(), new Scalar(0.0f));
         return layer;
     }
@@ -469,18 +412,7 @@ public class MinecraftRL extends Module {
 
         Conv3dImpl layer = new Conv3dImpl(conv3dOptions);
 
-        System.out.println("layer.weight().device().is_cuda() = " + layer.weight().device().is_cuda());
-
         orthogonal_(layer.weight(), Math.sqrt(2.0));
-
-        System.out.println("  Has NaN: " + layer.weight().isnan().any().item().toBool());
-
-        // // Xavier/Glorot normal initialization ???
-        // double fan_in = inChannels * kernelSize1 * kernelSize2 * kernelSize3;
-        // double fan_out = outChannels * kernelSize1 * kernelSize2 * kernelSize3;
-        // double xavier_std = Math.sqrt(2.0 / (fan_in + fan_out));
-        // torch.normal_(layer.weight(), 0.0, xavier_std);
-
         torch.constant_(layer.bias(), new Scalar(0.0f));
         return layer;
     }
@@ -566,12 +498,15 @@ public class MinecraftRL extends Module {
 
         // // LOGGER.debug("Shared features shape: {}", sharedFeatures.shape());
 
-        long batchSize = lstmState.hiddenState.size(1); // batchSizee\
+        long batchSize = lstmState.hiddenState().size(1); // batchSizee\
         Tensor hidden = sharedFeatures.reshape(-1, batchSize, this.lstm.options().input_size().get()); // size (B, batchSize, input_size)
         done = done.reshape(-1, batchSize); // size (B, batchSize)
 
         Tensor ones = torch.ones_like(done.get(0)).cuda();
         TensorVector newHidden = new TensorVector();
+
+        Tensor hiddenState = lstmState.hiddenState().clone();
+        Tensor cellState = lstmState.cellState().clone();
 
         for (int i = 0; i < hidden.size(0); i++) {
             Tensor h = hidden.get(i);
@@ -579,14 +514,18 @@ public class MinecraftRL extends Module {
 
             Tensor oneMinusD = ones.sub(d).view(1, -1, 1);
 
-            Tensor hiddenState = oneMinusD.mul(lstmState.hiddenState); // Hidden state size (1, batchSize, hidden_size)
-            Tensor cellState = oneMinusD.mul(lstmState.cellState); // Cell state size (1, batchSize, hidden_size)
+            Tensor maskedHiddenState = oneMinusD.mul(hiddenState); // Hidden state size (1, batchSize, hidden_size)
+            Tensor maskedCellState = oneMinusD.mul(cellState); // Cell state size (1, batchSize, hidden_size)
 
-            T_TensorTensor_T tTensorTensorT = new T_TensorTensor_T(hiddenState, cellState);
-            T_TensorT_TensorTensor_T_T hNew_LSTMState = this.lstm.forward(h.unsqueeze(0), tTensorTensorT);
+            T_TensorTensor_T inputState = new T_TensorTensor_T(maskedHiddenState, maskedCellState);
+            T_TensorT_TensorTensor_T_T hNew_LSTMState = this.lstm.forward(h.unsqueeze(0), inputState);
 
             newHidden.push_back(hNew_LSTMState.get0());
-            lstmState = new LSTMState(hNew_LSTMState.get1().get0(), hNew_LSTMState.get1().get1());
+            // lstmState = new LSTMState(hNew_LSTMState.get1().get0(), hNew_LSTMState.get1().get1());
+            // lstmState.set(hNew_LSTMState.get1());
+            T_TensorTensor_T outState = hNew_LSTMState.get1();
+            hiddenState = outState.get0();
+            cellState = outState.get1();
         }
         Tensor newHiddenTensor = torch.flatten(torch.cat(newHidden), 0, 1);
 
@@ -847,14 +786,32 @@ public class MinecraftRL extends Module {
 
     /**
      * Holds the state of an LSTM layer.
-     *
-     * @param hiddenState Shape (numEnvs, batchSize, hiddenSize)
-     * @param cellState   Shape (numEnvs, batchSize, hiddenSize)
+     * <p>
+     * hiddenState Shape (numEnvs, batchSize, hiddenSize)
+     * cellState   Shape (numEnvs, batchSize, hiddenSize)
      */
-    public record LSTMState(Tensor hiddenState, Tensor cellState) {
+    public static final class LSTMState {
+        private T_TensorTensor_T lstmState;
+
+        public LSTMState(T_TensorTensor_T lstmState) {this.lstmState = lstmState;}
+
+        public LSTMState(Tensor hiddenState, Tensor cellState) {
+            this(new T_TensorTensor_T(hiddenState, cellState));
+        }
+
+        public void set(T_TensorTensor_T hNewLstmState1) {
+            this.lstmState = hNewLstmState1;
+        }
+
+        public Tensor hiddenState() {return lstmState.get0();}
+
+        public Tensor cellState() {return lstmState.get1();}
+
+        public T_TensorTensor_T lstmState() {return lstmState;}
+
         @Override
-        protected LSTMState clone() {
-            return new LSTMState(hiddenState.clone(), cellState.clone());
+        public LSTMState clone() {
+            return new LSTMState(this.hiddenState().clone(), this.cellState().clone());
         }
     }
 

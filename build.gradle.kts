@@ -57,6 +57,7 @@ dependencies {
 ////                               openblas-0.3.29-1.5.12-20250601.130149-30-windows-x86_64.jar
 //    implementation("org.bytedeco:openblas:0.3.29-1.5.12-20250601.130149-30:windows-x86_64")
 
+
     // javacpp-1.5.12-20250613.133933-85-windows-x86_64.jar
     implementation("org.bytedeco:javacpp:1.5.12-20250613.133933-85:windows-x86_64")
 
@@ -64,6 +65,8 @@ dependencies {
     implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.193524-13:windows-x86_64-gpu")
 
 //    implementation("org.bytedeco:cuda:12.9-9.10-1.5.12-20250612.145546-3:windows-x86_64-redist")
+    // cuda-12.9-9.10-1.5.12-20250612.145546-3.jar
+    implementation("org.bytedeco:cuda:12.9-9.10-1.5.12-20250612.145546-3")
     // cuda-12.9-9.10-1.5.12-20250612.145546-3-windows-x86_64.jar
     implementation("org.bytedeco:cuda:12.9-9.10-1.5.12-20250612.145546-3:windows-x86_64")
 
@@ -71,6 +74,12 @@ dependencies {
 
     // mkl-2025.2-1.5.12-windows-x86_64.jar
     implementation("org.bytedeco:mkl:2025.2-1.5.12:windows-x86_64")
+
+//    implementation("org.bytedeco:pytorch-platform-gpu:2.7.1-1.5.12")
+//
+//    implementation("org.bytedeco:cuda-platform:12.9-9.10-1.5.12")
+//    implementation("org.bytedeco:cuda:12.9-9.10-1.5.12:windows-x86_64")
+
 
 //    //                        pytorch-2.7.1-1.5.12-windows-x86_64.jar
 //    implementation("org.bytedeco:pytorch:2.7.1-1.5.12")
@@ -112,6 +121,7 @@ tasks {
 
 tasks.register<Copy>("copyDependencies") {
     from(configurations.runtimeClasspath) {
+//        include("*.jar")
         include("**/*.jar")
     }
     into("C:\\Users\\Aidan\\Desktop\\Minecraft Servers\\Paper Server (Machine Learning Player)\\plugins\\lib\\")

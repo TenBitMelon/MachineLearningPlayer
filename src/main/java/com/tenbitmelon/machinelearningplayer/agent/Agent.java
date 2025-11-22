@@ -76,7 +76,7 @@ public class Agent extends ServerPlayer {
     public static CompletableFuture<Agent> spawn(MinecraftServer server, Location location) {
         CompletableFuture<Agent> agentFuture = new CompletableFuture<>();
 
-        String username = UUID.randomUUID().toString().substring(0, 3);
+        String username = UUID.randomUUID().toString().substring(0, 3) + agentCount++;
         // String username = String.valueOf(agentCount++);
         // -- Stolen from Carpet Mod: https://github.com/gnembon/fabric-carpet --
 
@@ -94,36 +94,36 @@ public class Agent extends ServerPlayer {
         GameProfile finalGP = gameprofile;
         String name = gameprofile.getName();
 
-        SkullBlockEntity.fetchGameProfile(name).whenCompleteAsync((p, t) -> {
-            if (t != null) {
-                agentFuture.completeExceptionally(t);
-                return;
-            }
+        // SkullBlockEntity.fetchGameProfile(name).whenCompleteAsync((p, t) -> {
+        //     if (t != null) {
+        //         agentFuture.completeExceptionally(t);
+        //         return;
+        //     }
 
-            GameProfile current = finalGP;
-            if (p.isPresent()) {
-                current = p.get();
-            }
+        GameProfile current = finalGP;
+        // if (p.isPresent()) {
+        //     current = p.get();
+        // }
 
-            Agent instance = new Agent(server, worldIn, current, ClientInformation.createDefault());
-            instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
-            server.getPlayerList().placeNewPlayer(new FakeClientConnection(PacketFlow.SERVERBOUND), instance, new CommonListenerCookie(current, 0, instance.clientInformation(), false));
-            instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
-            instance.teleportTo(worldIn, location.getX(), location.getY(), location.getZ(), Set.of(), 0.0f, 0.0f, true);
-            instance.setHealth(20.0F);
-            instance.unsetRemoved();
-            instance.getAttribute(Attributes.STEP_HEIGHT).setBaseValue(0.6F);
-            instance.gameMode.changeGameModeForPlayer(GameType.SURVIVAL, PlayerGameModeChangeEvent.Cause.PLUGIN, null);
-            server.getPlayerList().broadcastAll(new ClientboundRotateHeadPacket(instance, (byte) (instance.yHeadRot * 256 / 360)));
-            server.getPlayerList().broadcastAll(ClientboundEntityPositionSyncPacket.of(instance));
-            instance.entityData.set(DATA_PLAYER_MODE_CUSTOMISATION, (byte) 0x7f); // show all model layers (incl. capes)
-            // instance.debugWindow.setAnchor(Bukkit.getEntity(instance.getUUID()));
-            instance.debugWindow.setPosition(new Vector3d(instance.getX(), instance.getY() + 3, instance.getZ()));
+        Agent instance = new Agent(server, worldIn, current, ClientInformation.createDefault());
+        instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
+        server.getPlayerList().placeNewPlayer(new FakeClientConnection(PacketFlow.SERVERBOUND), instance, new CommonListenerCookie(current, 0, instance.clientInformation(), false));
+        instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
+        instance.teleportTo(worldIn, location.getX(), location.getY(), location.getZ(), Set.of(), 0.0f, 0.0f, true);
+        instance.setHealth(20.0F);
+        instance.unsetRemoved();
+        instance.getAttribute(Attributes.STEP_HEIGHT).setBaseValue(0.6F);
+        instance.gameMode.changeGameModeForPlayer(GameType.SURVIVAL, PlayerGameModeChangeEvent.Cause.PLUGIN, null);
+        server.getPlayerList().broadcastAll(new ClientboundRotateHeadPacket(instance, (byte) (instance.yHeadRot * 256 / 360)));
+        server.getPlayerList().broadcastAll(ClientboundEntityPositionSyncPacket.of(instance));
+        instance.entityData.set(DATA_PLAYER_MODE_CUSTOMISATION, (byte) 0x7f); // show all model layers (incl. capes)
+        // instance.debugWindow.setAnchor(Bukkit.getEntity(instance.getUUID()));
+        instance.debugWindow.setPosition(new Vector3d(instance.getX(), instance.getY() + 3, instance.getZ()));
 
-            instance.ready = true;
+        instance.ready = true;
 
-            agentFuture.complete(instance);
-        }, server);
+        agentFuture.complete(instance);
+        // }, server);
 
         return agentFuture;
     }
