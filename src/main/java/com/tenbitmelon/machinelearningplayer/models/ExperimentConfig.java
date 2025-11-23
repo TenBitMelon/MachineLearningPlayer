@@ -26,7 +26,7 @@ public class ExperimentConfig {
     /**
      * The number of mini-batches.
      */
-    public final int numMinibatches = 16;
+    public final int numMinibatches = 4;
     /**
      * The K epochs to update the policy.
      */

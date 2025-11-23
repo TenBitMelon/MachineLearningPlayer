@@ -7,27 +7,38 @@ import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.CounterControl
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import com.tenbitmelon.machinelearningplayer.environment.Action;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
-import com.tenbitmelon.machinelearningplayer.util.GatherFunction;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.pytorch.*;
-import org.bytedeco.pytorch.cuda.AllocatorTraceTracker;
 import org.bytedeco.pytorch.cuda.CUDAAllocator;
 import org.bytedeco.pytorch.cuda.DeviceStats;
 import org.bytedeco.pytorch.global.torch;
 import org.bytedeco.pytorch.global.torch_cuda;
 
-import java.util.ArrayList;
-
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 public class TrainingManager {
 
+    private static final Scalar SCALAR_ONE = new Scalar(1.0);
+    private static final Scalar SCALAR_1E_8 = new Scalar(1e-8);
+    private static final Scalar SCALAR_0_5 = new Scalar(0.5);
     static public boolean runTraining = false;
     static public boolean sprint = false;
     public static Device device;
-    static ExperimentConfig args;
+    static ExperimentConfig args = ExperimentConfig.getInstance();
+    // Pre computes:
+    private static final Scalar SCALAR_GAMMA = new Scalar(args.gamma);
+    private static final Scalar SCALAR_GAMMA_GAE_LAMBDA = new Scalar(args.gamma * args.gaeLambda);
+    private static final Scalar SCALAR_NUM_ENVS = new Scalar(args.numEnvs);
+    private static final Scalar SCALAR_BATCH_SIZE = new Scalar(args.batchSize);
+    private static final Scalar SCALAR_CLIP_COEF = new Scalar(args.clipCoef);
+    private static final ScalarOptional SCALAR_1_SUB_CLIP_COEF = new ScalarOptional(new Scalar(1.0 - args.clipCoef));
+    private static final ScalarOptional SCALAR_1_ADD_CLIP_COEF = new ScalarOptional(new Scalar(1.0 + args.clipCoef));
+    private static final ScalarOptional SCALAR_NEG_CLIP_COEF = new ScalarOptional(new Scalar(-args.clipCoef));
+    private static final ScalarOptional SCALAR_OPT_CLIP_COEF = new ScalarOptional(new Scalar(args.clipCoef));
+    private static final Scalar SCALAR_ENT_COEF = new Scalar(args.entCoef);
+    private static final Scalar SCALAR_VF_COEF = new Scalar(args.vfCoef);
+    //
     static SyncedVectorEnvironment environment;
     static MinecraftRL model;
     static MinecraftRL.LSTMState initialLSTMState;
@@ -41,7 +52,7 @@ public class TrainingManager {
     static String logText = "";
     static TrainingLogger trainingLogger;
     static CUDAAllocator allocator;
-
+    static TensorVector modelParameters;
     /** Shape: [numEnvs, Observation.OBSERVATION_SPACE_SIZE] */
     private static Tensor nextObs;
     /** Shape: [numSteps, numEnvs, Observation.OBSERVATION_SPACE_SIZE] */
@@ -64,14 +75,12 @@ public class TrainingManager {
     private static Tensor zerosLikeNumEnvs;
     /** Shape: [numEnvs] */
     private static Tensor onesLikeNumEnvs;
-
     private static boolean runningInnerLoop = false;
     private static boolean needsPostTickStep = false;
     private static int numTerminations = 0;
 
     public static void setup() {
         // LOGGER.debug("--- Setting up Training Manager ---");
-        args = ExperimentConfig.getInstance();
         // LOGGER.debug("ExperimentConfig loaded. numEnvs={}, numSteps={}", args.numEnvs, args.numSteps);
         environment = new SyncedVectorEnvironment(args);
         // LOGGER.debug("SyncedVectorEnvironment initialized.");
@@ -79,6 +88,7 @@ public class TrainingManager {
         model.loadCheckpoint(args.startingCheckpoint);
         device = new Device("cuda:0");
         model.to(device, false);
+        modelParameters = model.parameters();
         LOGGER.memory();
 
         trainingLogger = new TrainingLogger(args, "logs/training");
@@ -103,6 +113,7 @@ public class TrainingManager {
         System.out.println("deviceStats.allocated_bytes().freed() = " + deviceStats.allocated_bytes().freed());
         System.out.println("deviceStats.allocated_bytes().peak() = " + deviceStats.allocated_bytes().peak());
 
+
         nextLstmState = new MinecraftRL.LSTMState(
             torch.zeros(model.getLSTMLayers(), args.numEnvs, model.lstmHiddenSize).cuda(),
             torch.zeros(model.getLSTMLayers(), args.numEnvs, model.lstmHiddenSize).cuda());
@@ -116,7 +127,7 @@ public class TrainingManager {
 
 
         adamOptions = new AdamWOptions(args.learningRate);
-        optimizer = new AdamW(model.parameters(), adamOptions);
+        optimizer = new AdamW(modelParameters, adamOptions);
         adamOptions.eps().put(1e-7);
         LOGGER.memory();
         // LOGGER.debug("Adam optimizer initialized with learning rate: {}", args.learningRate);
@@ -290,7 +301,7 @@ public class TrainingManager {
         // LOGGER.debug("Next Obs: {}", tensorString(nextObs));
         // LOGGER.debug("Observations before storing: {}", tensorString(observations));
         // LOGGER.debug("Observations after storing: {}", tensorString(observations));
-        observations.get(step).copy_(nextObs);
+        observations.get(step).copy_(nextObs.detach());
         dones.get(step).copy_(nextDone);
         LOGGER.memory();
         // LOGGER.debug("[Step {}] Stored next_obs (shape: {}) and next_done (shape: {})", step, nextObs.shape(), nextDone.shape());
@@ -313,7 +324,7 @@ public class TrainingManager {
         AutogradState.get_tls_state().set_grad_mode(true);
         LOGGER.memory();
 
-        actions.get(step).copy_(actionResult.action());
+        actions.get(step).copy_(actionResult.action().detach());
         logprobs.get(step).copy_(actionResult.totalLogProbs());
         LOGGER.memory();
         // LOGGER.debug("[Step {}] Stored values (shape: {}), actions (shape: {}), logprobs (shape: {})", step, values.get(step).shape(), actions.get(step).shape(), logprobs.get(step).shape());
@@ -437,7 +448,7 @@ public class TrainingManager {
             // )
             Tensor delta = rewards.get(t)
                 .add(
-                    nextValues.mul(nextNonTerminal).mul(new Scalar(args.gamma))
+                    nextValues.mul(nextNonTerminal).mul(SCALAR_GAMMA)
                 )
                 .sub(values.get(t));
 
@@ -446,9 +457,8 @@ public class TrainingManager {
             // advantages[t] = lastgaelam = (
             //     delta + args.gamma * args.gae_lambda * nextnonterminal * lastgaelam
             // )
-            double multpart = args.gamma * args.gaeLambda;
             Tensor advantage = delta.add(
-                nextNonTerminal.mul(new Scalar(multpart)).mul(lastGAELam == null ? zerosLikeNumEnvs : lastGAELam)
+                nextNonTerminal.mul(SCALAR_GAMMA_GAE_LAMBDA).mul(lastGAELam == null ? zerosLikeNumEnvs : lastGAELam)
             );
             advantages.get(t).copy_(advantage);
             lastGAELam = advantage;
@@ -490,8 +500,8 @@ public class TrainingManager {
         assert args.numEnvs % args.numMinibatches == 0 : "Number of environments must be divisible by number of minibatches.";
 
         int envsPerBatch = args.numEnvs / args.numMinibatches;
-        Tensor envinds = torch.arange(new Scalar(args.numEnvs)).cuda();
-        Tensor flatinds = torch.arange(new Scalar(args.batchSize)).reshape(args.numSteps, args.numEnvs).cuda();
+        Tensor envinds = torch.arange(SCALAR_NUM_ENVS).cuda();
+        Tensor flatinds = torch.arange(SCALAR_BATCH_SIZE).reshape(args.numSteps, args.numEnvs).cuda();
         LOGGER.memory();
 
             /*
@@ -501,7 +511,9 @@ public class TrainingManager {
                 for start in range(0, args.num_envs, envsperbatch):
                 */
 
-        ArrayList<Float> clipFracs = new ArrayList<>();
+        // ArrayList<Float> clipFracs = new ArrayList<>();
+        Tensor clipFracs = torch.zeros(1).cuda();
+        int numClipFracs = 0;
         Tensor vLoss = null;
         Tensor pgLoss = null;
         Tensor entropyLoss = null;
@@ -622,9 +634,12 @@ public class TrainingManager {
                 AutogradState.get_tls_state().set_grad_mode(false);
 
                 oldApproxKl = logRatio.neg().mean();
-                approxKl = ratio.sub(new Scalar(1.0)).sub(logRatio).mean();
-                Scalar item = ratio.sub(new Scalar(1.0)).abs().gt(new Scalar(args.clipCoef)).toType(torch.ScalarType.Float).mean().item();
-                clipFracs.add(item.toFloat());
+                approxKl = ratio.sub(SCALAR_ONE).sub_(logRatio).mean();
+                // Scalar item = ratio.sub(SCALAR_ONE).abs().gt(SCALAR_CLIP_COEF).toType(torch.ScalarType.Float).mean().item();
+                // clipFracs.add(item.toFloat());
+                Tensor clipFracTensor = ratio.sub(SCALAR_ONE).abs_().gt_(SCALAR_CLIP_COEF).mean();
+                clipFracs.add_(clipFracTensor);
+                numClipFracs++;
                 LOGGER.memory();
 
                 AutogradState.get_tls_state().set_grad_mode(true);
@@ -648,7 +663,7 @@ public class TrainingManager {
                 if (args.normAdv) {
                     Tensor mean = mbAdvantages.mean();
                     Tensor std = mbAdvantages.std();
-                    mbAdvantages = mbAdvantages.sub(mean).div(std.add(new Scalar(1e-8)));
+                    mbAdvantages = mbAdvantages.sub(mean).div(std.add(SCALAR_1E_8));
                 }
                 LOGGER.memory();
 
@@ -665,7 +680,7 @@ public class TrainingManager {
 
                 Tensor pgLoss1 = mbAdvantages.neg().mul(ratio);
                 Tensor pgLoss2 = mbAdvantages.neg().mul(
-                    torch.clamp(ratio, new ScalarOptional(new Scalar(1.0 - args.clipCoef)), new ScalarOptional(new Scalar(1.0 + args.clipCoef)))
+                    torch.clamp(ratio, SCALAR_1_SUB_CLIP_COEF, SCALAR_1_ADD_CLIP_COEF)
                 );
                 pgLoss = torch.max(pgLoss1, pgLoss2).mean();
                 LOGGER.memory();
@@ -707,13 +722,13 @@ public class TrainingManager {
 
                     Tensor vClipped = bValuesMB.add(
                         torch.clamp(newValue.sub(bValuesMB),
-                            new ScalarOptional(new Scalar(-args.clipCoef)),
-                            new ScalarOptional(new Scalar(args.clipCoef)))
+                            SCALAR_NEG_CLIP_COEF,
+                            SCALAR_OPT_CLIP_COEF)
                     );
 
                     Tensor vLossClipped = vClipped.sub(mbReturns).square();
                     Tensor vLossMax = torch.max(vLossUnclipped, vLossClipped);
-                    vLoss = vLossMax.mean().mul(new Scalar(0.5));
+                    vLoss = vLossMax.mean().mul(SCALAR_0_5);
                 } else {
                         /*
 
@@ -721,7 +736,7 @@ public class TrainingManager {
                         v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
 
                          */
-                    vLoss = newValue.sub(mbReturns).square().mean().mul(new Scalar(0.5));
+                    vLoss = newValue.sub(mbReturns).square().mean().mul(SCALAR_0_5);
                 }
                 LOGGER.memory();
 
@@ -733,9 +748,9 @@ public class TrainingManager {
 
                 entropyLoss = actionAndValueResult.totalEntropy().mean();
                 Tensor loss = pgLoss.sub(
-                    entropyLoss.mul(new Scalar(args.entCoef))
+                    entropyLoss.mul(SCALAR_ENT_COEF)
                 ).add(
-                    vLoss.mul(new Scalar(args.vfCoef))
+                    vLoss.mul(SCALAR_VF_COEF)
                 );
                 LOGGER.memory();
 
@@ -752,7 +767,7 @@ public class TrainingManager {
                 loss.backward();
                 LOGGER.memory();
                 // Clip gradients
-                torch.clip_grad_norm_(model.parameters(), args.maxGradNorm);
+                torch.clip_grad_norm_(modelParameters, args.maxGradNorm);
                 LOGGER.memory();
                 optimizer.step();
                 LOGGER.memory();
@@ -819,11 +834,13 @@ public class TrainingManager {
             double entropy = entropyLoss.item().toDouble();
             Double oldApproxKlVal = oldApproxKl != null ? oldApproxKl.item().toDouble() : null;
             Double approxKlVal = approxKl != null ? approxKl.item().toDouble() : null;
-            double clipfrac = clipFracs.stream().mapToDouble(Float::doubleValue).average().orElse(0.0);
+            double clipfrac = clipFracs.div(new Scalar(numClipFracs)).item().toFloat();
             double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
             double sps = ((args.numEnvs * args.numSteps) / iterationTime);
             double averageRewards = rewards.mean().item().toDouble();
             trainingLogger.logStep(iteration, learningRate, valueLoss, policyLoss, entropy, oldApproxKlVal, approxKlVal, clipfrac, explainedVar, iterationTime, sps, numTerminations, averageRewards);
+
+            LOGGER.info("Approx KL this epoch: {}", approxKlVal);
         } catch (Exception e) {
             LOGGER.error("Failed to log training metrics: {}", e.getMessage());
         }

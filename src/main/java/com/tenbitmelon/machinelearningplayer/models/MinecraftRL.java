@@ -3,6 +3,7 @@ package com.tenbitmelon.machinelearningplayer.models;
 import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import com.tenbitmelon.machinelearningplayer.util.distrobutions.Bernoulli;
+import com.tenbitmelon.machinelearningplayer.util.distrobutions.Categorical;
 import com.tenbitmelon.machinelearningplayer.util.distrobutions.Normal;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.javacpp.LongPointer;
@@ -34,7 +35,8 @@ public class MinecraftRL extends Module {
     private final LinearImpl actorSprintKey;
     private final LinearImpl actorSneakKey;
     private final LinearImpl actorJumpKey;
-    private final LinearImpl actorMoveKeys;
+    private final LinearImpl actorForwardMoveKeys;
+    private final LinearImpl actorStrafingMoveKeys;
 
     public MinecraftRL(SyncedVectorEnvironment environment) {
 
@@ -220,9 +222,12 @@ public class MinecraftRL extends Module {
         self.actor_jump_key = layer_init(
             nn.Linear(actor_input_dim, 1), std=0.01
         )  # Logit for jump
-        self.actor_move_keys = layer_init(
-            nn.Linear(actor_input_dim, 4), std=0.01
-        )  # Logits for W,S,A,D
+        self.actor_froward_move_keys = layer_init(
+            nn.Linear(actor_input_dim, 3), std=0.01
+        )  # Logits for W,S, & none
+        self.actor_strafing_move_keys = layer_init(
+            nn.Linear(actor_input_dim, 3), std=0.01
+        )  # Logits for A,D, & none
 
         # Critic Head
         self.critic = layer_init(nn.Linear(actor_input_dim, 1), std=1)
@@ -230,12 +235,14 @@ public class MinecraftRL extends Module {
 
         long actorInputDim = lstmHiddenSize;
         LinearImpl actorLookChangeMean = createLinearLayer(actorInputDim, 2, 0.01);
-        Tensor actorLookChangeLogSTD = torch.zeros(1, 2);
+        // Tensor actorLookChangeLogSTD = torch.zeros(1, 2); // This would lead to max motion 68% of time
+        Tensor actorLookChangeLogSTD = torch.ones(1, 2).mul(new Scalar(-1.0f)); // Start with small stddev
 
         LinearImpl actorSprintKey = createLinearLayer(actorInputDim, 1, 0.01);
         LinearImpl actorSneakKey = createLinearLayer(actorInputDim, 1, 0.01);
         LinearImpl actorJumpKey = createLinearLayer(actorInputDim, 1, 0.01);
-        LinearImpl actorMoveKeys = createLinearLayer(actorInputDim, 4, 0.01);
+        LinearImpl actorForwardMoveKeys = createLinearLayer(actorInputDim, 3, 0.01);
+        LinearImpl actorStrafingMoveKeys = createLinearLayer(actorInputDim, 3, 0.01);
 
 
         // LinearImpl critic = createLinearLayer(actorInputDim, 1, 1.0);
@@ -253,7 +260,8 @@ public class MinecraftRL extends Module {
         register_module("actor_sprint_key", actorSprintKey);
         register_module("actor_sneak_key", actorSneakKey);
         register_module("actor_jump_key", actorJumpKey);
-        register_module("actor_move_keys", actorMoveKeys);
+        register_module("actor_forward_move_keys", actorForwardMoveKeys);
+        register_module("actor_strafing_move_keys", actorStrafingMoveKeys);
         register_module("critic", critic);
 
         this.actorLookChangeMean = actorLookChangeMean;
@@ -261,7 +269,8 @@ public class MinecraftRL extends Module {
         this.actorSprintKey = actorSprintKey;
         this.actorSneakKey = actorSneakKey;
         this.actorJumpKey = actorJumpKey;
-        this.actorMoveKeys = actorMoveKeys;
+        this.actorForwardMoveKeys = actorForwardMoveKeys;
+        this.actorStrafingMoveKeys = actorStrafingMoveKeys;
         this.critic = critic;
 
         // LOGGER.debug("MinecraftRL model initialized successfully.");
@@ -498,29 +507,38 @@ public class MinecraftRL extends Module {
 
         // // LOGGER.debug("Shared features shape: {}", sharedFeatures.shape());
 
-        long batchSize = lstmState.hiddenState().size(1); // batchSizee\
+        long batchSize = lstmState.hiddenState().size(1); // batchSize
         Tensor hidden = sharedFeatures.reshape(-1, batchSize, this.lstm.options().input_size().get()); // size (B, batchSize, input_size)
         done = done.reshape(-1, batchSize); // size (B, batchSize)
 
-        Tensor ones = torch.ones_like(done.get(0)).cuda();
+        long seqLen = hidden.size(0); // seqLen = B
+
         TensorVector newHidden = new TensorVector();
+        // Tensor newHidden = torch.zeros(new long[]{seqLen, batchSize, this.lstmHiddenSize}, new TensorOptions(TrainingManager.device));
 
         Tensor hiddenState = lstmState.hiddenState().clone();
         Tensor cellState = lstmState.cellState().clone();
 
-        for (int i = 0; i < hidden.size(0); i++) {
-            Tensor h = hidden.get(i);
-            Tensor d = done.get(i);
+        Tensor ones = torch.ones_like(done, new TensorOptions(TrainingManager.device), null); // size (B, batchSize)
+        Tensor oneSubDone = ones.sub_(done); // size (B, batchSize)
 
-            Tensor oneMinusD = ones.sub(d).view(1, -1, 1);
+        TensorVector hiddenList = torch.unbind(hidden, 0);
+        TensorVector oneSubDoneList = torch.unbind(oneSubDone, 0);
 
-            Tensor maskedHiddenState = oneMinusD.mul(hiddenState); // Hidden state size (1, batchSize, hidden_size)
-            Tensor maskedCellState = oneMinusD.mul(cellState); // Cell state size (1, batchSize, hidden_size)
+        for (int i = 0; i < seqLen; i++) {
+            Tensor h = hiddenList.get(i).unsqueeze(0); // size (1, batchSize, input_size)
+            Tensor d = oneSubDoneList.get(i) // size (batchSize,)
+                .view(1, -1, 1); // Reshape to (1, batchSize, 1)
 
-            T_TensorTensor_T inputState = new T_TensorTensor_T(maskedHiddenState, maskedCellState);
-            T_TensorT_TensorTensor_T_T hNew_LSTMState = this.lstm.forward(h.unsqueeze(0), inputState);
+            hiddenState.mul_(d); // Hidden state size (1, batchSize, hidden_size)
+            cellState.mul_(d); // Cell state size (1, batchSize, hidden_size)
+
+            T_TensorTensor_T inputState = new T_TensorTensor_T(hiddenState, cellState);
+            T_TensorT_TensorTensor_T_T hNew_LSTMState = this.lstm.forward(h, inputState);
 
             newHidden.push_back(hNew_LSTMState.get0());
+            // newHidden.index_copy_(0, torch.tensor(i), hNew_LSTMState.get0());
+            // newHidden.narrow(0, i, 1).copy_(hNew_LSTMState.get0());
             // lstmState = new LSTMState(hNew_LSTMState.get1().get0(), hNew_LSTMState.get1().get1());
             // lstmState.set(hNew_LSTMState.get1());
             T_TensorTensor_T outState = hNew_LSTMState.get1();
@@ -528,6 +546,7 @@ public class MinecraftRL extends Module {
             cellState = outState.get1();
         }
         Tensor newHiddenTensor = torch.flatten(torch.cat(newHidden), 0, 1);
+        // Tensor newHiddenTensor = torch.flatten(newHidden, 0, 1);
 
         /*
         return new_hidden, lstm_state
@@ -592,10 +611,10 @@ public class MinecraftRL extends Module {
         jump_dist = torch.distributions.Bernoulli(logits=jump_logits)
 
         # Move Keys (MultiBinary - Bernoulli for each)
-        move_logits = self.actor_move_keys(actor_critic_features)  # Shape: (B, 4)
-        move_dist = torch.distributions.Bernoulli(
-            logits=move_logits
-        )  # Will sample (B,4) of 0s and 1s
+        forward_move_logits = self.actor_forward_move_keys(actor_critic_features)  # Shape: (B, 3)
+        forward_move_dist = torch.distributions.Categorical(logits=forward_move_logits)
+        strafing_move_logits = self.actor_strafing_move_keys(actor_critic_features)  # Shape: (B, 3)
+        strafing_move_dist = torch.distributions.Categorical(logits=strafing_move_logits)
          */
 
         Tensor lookMeans = torch.tanh(this.actorLookChangeMean.forward(sharedFeatures));
@@ -615,8 +634,11 @@ public class MinecraftRL extends Module {
         Bernoulli jumpDist = new Bernoulli(jumpLogits);
         // LOGGER.debug("Jump logits shape: {}", jumpLogits.shape());
 
-        Tensor moveLogits = this.actorMoveKeys.forward(sharedFeatures); // Shape: (B, 4)
-        Bernoulli moveDist = new Bernoulli(moveLogits); // Will sample (B,4) of 0s and 1s
+        Tensor forwardMoveLogits = this.actorForwardMoveKeys.forward(sharedFeatures); // Shape: (B, 3)
+        Tensor strafingMoveLogits = this.actorStrafingMoveKeys.forward(sharedFeatures); // Shape: (B, 3)
+        Categorical forwardMoveDist = new Categorical(forwardMoveLogits);
+        Categorical strafingMoveDist = new Categorical(strafingMoveLogits);
+
         // LOGGER.debug("Move logits shape: {}", moveLogits.shape());
 
         // LOGGER.debug("Sprint logits values: {}", tensorString(sprintLogits));
@@ -630,7 +652,8 @@ public class MinecraftRL extends Module {
             sprint_sample = sprint_dist.sample()  # (B, 1)
             sneak_sample = sneak_dist.sample()  # (B, 1)
             jump_sample = jump_dist.sample()  # (B, 1)
-            move_sample = move_dist.sample()  # (B, 4)
+            forward_move_sample = forward_move_dist.sample()  # (B, 1)
+            strafing_move_sample = strafing_move_dist.sample()  # (B, 1)
 
             # Concatenate along the last dimension -> flat per-sample vector
             # Resulting shape: (B, 2+1+1+1+4) = (B, 9)
@@ -653,7 +676,8 @@ public class MinecraftRL extends Module {
             Tensor sprintSample = sprintDist.sample(); // Correctly sampling discrete values (0 or 1)
             Tensor sneakSample = sneakDist.sample();
             Tensor jumpSample = jumpDist.sample();
-            Tensor moveSample = moveDist.sample();
+            Tensor forwardMoveSample = forwardMoveDist.sample();
+            Tensor strafingMoveSample = strafingMoveDist.sample();
             // LOGGER.debug("Sampled actions shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
             //     lookSample.shape(), sprintSample.shape(), sneakSample.shape(), jumpSample.shape(), moveSample.shape());
 
@@ -664,8 +688,8 @@ public class MinecraftRL extends Module {
             // LOGGER.debug("Move sample: {}", tensorString(moveSample));
 
             // Concatenate along the last dimension -> flat per-sample vector
-            // Resulting shape: (B, 2+1+1+1+4) = (B, 9)
-            action = torch.cat(new TensorVector(lookSample, sprintSample, sneakSample, jumpSample, moveSample), -1);
+            // Resulting shape: (B, Look(2), Sprint(1), Sneak(1), Jump(1), Long(1), Lat(1)) = (B, 7)
+            action = torch.cat(new TensorVector(lookSample, sprintSample, sneakSample, jumpSample, forwardMoveSample, strafingMoveSample), -1);
             // LOGGER.debug("Concatenated action: {}", tensorString(action));
         }
 
@@ -681,15 +705,19 @@ public class MinecraftRL extends Module {
         log_probs_sneak = sneak_dist.log_prob(sneak_action).squeeze(-1)
         jump_action = action[..., 4:5].float()
         log_probs_jump = jump_dist.log_prob(jump_action).squeeze(-1)
-        move_action = action[..., 5:].float()
-        log_probs_move = move_dist.log_prob(move_action).sum(dim=-1)
+        forward_move_action = action[..., 5:6].float()
+        log_probs_forward_move = forward_move_dist.log_prob(forward_move_action).sum(dim=-1)
+        strafing_move_action = action[..., 6:7].float()
+        log_probs_strafing_move = strafing_move_dist.log_prob(strafing_move_action).sum(dim=-1)
+
 
         total_log_probs = (
             log_probs_look
             + log_probs_sprint
             + log_probs_sneak
             + log_probs_jump
-            + log_probs_move
+            + log_probs_forward_move
+            + log_probs_strafing_move
         )
          */
 
@@ -701,13 +729,15 @@ public class MinecraftRL extends Module {
         Tensor logProbsSneak = sneakDist.logProb(sneakAction).squeeze(-1);
         Tensor jumpAction = action.narrow(-1, 4, 1);
         Tensor logProbsJump = jumpDist.logProb(jumpAction).squeeze(-1);
-        Tensor moveAction = action.narrow(-1, 5, 4);
-        Tensor logProbsMove = moveDist.logProb(moveAction).sum(-1);
+        Tensor forwardMoveAction = action.narrow(-1, 5, 1);
+        Tensor logProbsForwardMove = forwardMoveDist.logProb(forwardMoveAction);
+        Tensor strafingMoveAction = action.narrow(-1, 6, 1);
+        Tensor logProbsStrafingMove = strafingMoveDist.logProb(strafingMoveAction);
         // LOGGER.debug("Log probs shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
         //     logProbsLook.shape(), logProbsSprint.shape(), logProbsSneak.shape(), logProbsJump.shape(), logProbsMove.shape());
 
         Tensor totalLogProbs = logProbsLook.add(logProbsSprint).add(logProbsSneak)
-            .add(logProbsJump).add(logProbsMove);
+            .add(logProbsJump).add(logProbsForwardMove).add(logProbsStrafingMove);
         // LOGGER.debug("Total log probs shape: {}", totalLogProbs.shape());
 
         /*
@@ -726,12 +756,13 @@ public class MinecraftRL extends Module {
         Tensor entropySprint = sprintDist.entropy().squeeze(-1);
         Tensor entropySneak = sneakDist.entropy().squeeze(-1);
         Tensor entropyJump = jumpDist.entropy().squeeze(-1);
-        Tensor entropyMove = moveDist.entropy().sum(-1);
+        Tensor entropyForwardMove = forwardMoveDist.entropy();
+        Tensor entropyStrafingMove = strafingMoveDist.entropy();
         // LOGGER.debug("Entropy shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
         //     entropyLook.shape(), entropySprint.shape(), entropySneak.shape(), entropyJump.shape(), entropyMove.shape());
 
         Tensor totalEntropy = entropyLook.add(entropySprint).add(entropySneak)
-            .add(entropyJump).add(entropyMove);
+            .add(entropyJump).add(entropyForwardMove).add(entropyStrafingMove);
         // LOGGER.debug("Total entropy shape: {}", totalEntropy.shape());
 
         /*

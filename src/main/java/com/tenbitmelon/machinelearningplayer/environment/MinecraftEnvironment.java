@@ -202,9 +202,9 @@ public class MinecraftEnvironment {
 
         // 3. Velocity (3 values)
         Vec3 agentVelocity = agent.getDeltaMovement();
-        observationData[Observation.OFFSET_VELOCITY + 0] = (float) agentVelocity.x();
-        observationData[Observation.OFFSET_VELOCITY + 1] = (float) agentVelocity.y();
-        observationData[Observation.OFFSET_VELOCITY + 2] = (float) agentVelocity.z();
+        observationData[Observation.OFFSET_VELOCITY + 0] = (float) agentVelocity.x() / 5.0f; // TODO: Normalize based on max expected velocity
+        observationData[Observation.OFFSET_VELOCITY + 1] = (float) agentVelocity.y() / 20.0f; // falling from 15 blocks is 26.41 m/s (8 blocks is 20.95 m/s)
+        observationData[Observation.OFFSET_VELOCITY + 2] = (float) agentVelocity.z() / 5.0f;
 
         // 4. Look direction (3 values)
         Vec3 lookDirectionVec = agent.getLookAngle().normalize();
@@ -298,20 +298,9 @@ public class MinecraftEnvironment {
         // LOGGER.debug("Setting agent rotation: [{}, {}]", rotation.x, rotation.y);
         agent.actionPack.turn(rotation);
 
-
-        /*
-        table:
-        forward | forwardPressed | backwardPressed
-        --------|----------------|----------------
-        0       | false          | false
-        1       | true           | false
-        -1      | false          | true
-        0       | true           | true
-         */
-        Action.MovementKeys movementKeys = action.moveKeys();
         // LOGGER.debug("Movement keys: {}", movementKeys);
-        int moveForward = (movementKeys.forward() == 1 ? 1 : 0) - (movementKeys.backward() == 1 ? 1 : 0);
-        int moveRight = (movementKeys.right() == 1 ? 1 : 0) - (movementKeys.left() == 1 ? 1 : 0);
+        int moveForward = action.forwardMoveKey();
+        int moveRight = action.strafeMoveKey();
 
         // LOGGER.debug("Setting agent movement: forward={}, right={}", moveForward, moveRight);
 
@@ -329,11 +318,13 @@ public class MinecraftEnvironment {
 
         // Positive is closer to goal, negative is further from goal
         double deltaDistanceToGoal = previousDistanceToGoal - info.distanceToGoal();
-        double reward = deltaDistanceToGoal * 5.0;
+        // double reward = deltaDistanceToGoal * 5.0;
 
         double maxDistance = GRID_SIZE_XZ * 2;
         double proximityReward = Math.max(0, (maxDistance - info.distanceToGoal()) / maxDistance) * 0.1;
-        reward += proximityReward;
+        // reward += proximityReward;
+
+        double reward = (deltaDistanceToGoal * 5.0 + proximityReward) * 0.1;
 
         // double reward = deltaDistanceToGoal * 5.0 + proximityReward * 0.5;
         // previousDistanceToGoal = info.distanceToGoal();
