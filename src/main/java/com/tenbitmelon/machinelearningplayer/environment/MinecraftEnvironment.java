@@ -5,6 +5,8 @@ import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.util.TextDisplayBuilder;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
@@ -184,7 +186,9 @@ public class MinecraftEnvironment {
                         observationData[index] = 0.5f;
                         // TODO: Adapt this when the goal eventually has different y positions
                     } else if (goalPosition != null && (int) (position.x() + x) == (int) (goalPosition.x) && (int) (position.y() + y) == (int) (goalPosition.y) && (int) (position.z() + z) == (int) (goalPosition.z)) {
-                        observationData[index] = 1f;
+                        observationData[index] = 1.0f;
+                    } else {
+                        observationData[index] = 0.0f;
                     }
 
                     index++;
@@ -207,10 +211,12 @@ public class MinecraftEnvironment {
         observationData[Observation.OFFSET_VELOCITY + 2] = (float) agentVelocity.z() / 5.0f;
 
         // 4. Look direction (3 values)
-        Vec3 lookDirectionVec = agent.getLookAngle().normalize();
-        observationData[Observation.OFFSET_LOOK_DIRECTION + 0] = (float) lookDirectionVec.x();
-        observationData[Observation.OFFSET_LOOK_DIRECTION + 1] = (float) lookDirectionVec.y();
-        observationData[Observation.OFFSET_LOOK_DIRECTION + 2] = (float) lookDirectionVec.z();
+        float yawRad = (float) Math.toRadians(agent.getYRot());
+        float pitchRad = (float) Math.toRadians(agent.getXRot());
+        observationData[Observation.OFFSET_YAW + 0] = (float) Math.sin(yawRad);
+        observationData[Observation.OFFSET_YAW + 1] = (float) Math.cos(yawRad);
+        observationData[Observation.OFFSET_PITCH + 0] = (float) Math.sin(pitchRad);
+        observationData[Observation.OFFSET_PITCH + 1] = (float) Math.cos(pitchRad);
 
         // 5. Boolean flags (4 values)
         observationData[Observation.OFFSET_JUMPING] = agent.jumping ? 1.0f : 0.0f; // TODO: Remove this
@@ -285,18 +291,18 @@ public class MinecraftEnvironment {
         this.currentStep++;
 
         // LOGGER.debug("Updating agent action pack with action before: {}", agent.actionPack);
-        boolean sneaking = action.sneaking() == 1;
-        agent.actionPack.setSneaking(sneaking);
-        if (!sneaking) {
-            agent.actionPack.setSprinting(action.sprinting() == 1);
-        }
-        if (action.jumping() == 1) {
-            agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
-        }
+        /// boolean sneaking = action.sneaking() == 1;
+        /// agent.actionPack.setSneaking(sneaking);
+        /// if (!sneaking) {
+        ///     agent.actionPack.setSprinting(action.sprinting() == 1);
+        /// }
+        /// if (action.jumping() == 1) {
+        ///     agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
+        /// }
 
-        Vec2 rotation = action.lookChange().scale(15.0f); // Scale to a reasonable rotation speed
+        /// Vec2 rotation = action.lookChange().scale(15.0f); // Scale to a reasonable rotation speed
         // LOGGER.debug("Setting agent rotation: [{}, {}]", rotation.x, rotation.y);
-        agent.actionPack.turn(rotation);
+        /// agent.actionPack.turn(rotation); // Yaw, Pitch
 
         // LOGGER.debug("Movement keys: {}", movementKeys);
         int moveForward = action.forwardMoveKey();
@@ -311,45 +317,38 @@ public class MinecraftEnvironment {
     }
 
     public StepResult postTickStep() {
-        // --- Calculate rewards
         Info info = getInfo();
 
-        // LOGGER.debug("Calculating reward based on distance to goal: {}", info.distanceToGoal());
+        // Calculate rewards
+        double distanceToGoal = info.distanceToGoal();
 
-        // Positive is closer to goal, negative is further from goal
-        double deltaDistanceToGoal = previousDistanceToGoal - info.distanceToGoal();
-        // double reward = deltaDistanceToGoal * 5.0;
+        // Simple distance-based reward (sparse)
+        double reward = 0.0;
 
-        double maxDistance = GRID_SIZE_XZ * 2;
-        double proximityReward = Math.max(0, (maxDistance - info.distanceToGoal()) / maxDistance) * 0.1;
-        // reward += proximityReward;
-
-        double reward = (deltaDistanceToGoal * 5.0 + proximityReward) * 0.1;
-
-        // double reward = deltaDistanceToGoal * 5.0 + proximityReward * 0.5;
-        // previousDistanceToGoal = info.distanceToGoal();
-        // double reward = -info.distanceToGoal();
-
-        // reward -= 0.05; // Small penalty for each step taken
-        // Hi Aidan, I hope youre having fun! - Allie
-        // Peepee poo poo - Theo
-        // "ctrl + A, backspace" - Ben
-        // Hi Aidan! Uhmmmm. LIVE IT UP ... in ... michigan - Eryn
-
-        // thank you everyone! y’all are amazing
-        // LOGGER.debug("Current step: {}, Reward: {}", this.currentStep, reward);
-
+        // Big reward for reaching goal
         boolean terminated = false;
-        if (info.distanceToGoal() < GOAL_THRESHOLD) {
-            reward += 10.0;
+        if (distanceToGoal < GOAL_THRESHOLD) {
+            reward = 100.0;
             terminated = true;
+        } else {
+            // Negative reward proportional to distance (encourages getting closer)
+            reward = -distanceToGoal;
+
+            // Optional: XZ-only look direction bonus
+            Vec3 goalDirection = goalPosition.subtract(agent.position());
+            Vec3 goalDirectionXZ = new Vec3(goalDirection.x, 0, goalDirection.z).normalize();
+
+            Vec3 lookDirection = agent.getLookAngle();
+
+            double lookDotXZ = goalDirectionXZ.dot(lookDirection);
+            double lookBonus = ((lookDotXZ + 1) / 2.0) * 0.1; // Small bonus, 0 to 0.1
+
+            reward += lookBonus;
         }
 
-        // System.out.println(reward);
-
         boolean truncated = this.currentStep > this.args.numSteps;
-
-        // LOGGER.debug("Truncated step: {}", truncated);
+        double deltaDistanceToGoal = distanceToGoal - previousDistanceToGoal;
+        previousDistanceToGoal = distanceToGoal;
 
 
         // environmentLog.addLine(Component.newline().append(
@@ -361,9 +360,6 @@ public class MinecraftEnvironment {
         //     Component.text("ΔD: "),
         //     Component.text(String.format("%.2f (%.2f)", deltaDistanceToGoal, deltaDistanceToGoal * 5.0))
         //         .color(deltaDistanceToGoal > 0 ? NamedTextColor.GREEN : NamedTextColor.RED),
-        //     Component.newline(),
-        //     Component.text(" P: "),
-        //     Component.text(String.format("%.2f (%.2f)", proximityReward, proximityReward * 0.5)),
         //     Component.newline(),
         //     Component.text(" R: "),
         //     Component.text(String.format("%.2f", reward))
@@ -381,7 +377,6 @@ public class MinecraftEnvironment {
         //     String.format("%.5f", info.distanceToGoal()) + ", " +
         //     String.format("%.5f", deltaDistanceToGoal) + ", " +
         //     String.format("%.5f", reward));
-
 
         return new StepResult(getObservation(), reward, terminated, truncated, info);
     }

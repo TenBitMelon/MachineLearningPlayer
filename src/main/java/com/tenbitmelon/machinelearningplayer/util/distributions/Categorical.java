@@ -1,4 +1,4 @@
-package com.tenbitmelon.machinelearningplayer.util.distrobutions;
+package com.tenbitmelon.machinelearningplayer.util.distributions;
 
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.global.torch;
@@ -48,7 +48,7 @@ public class Categorical {
         // Tensor probs2d = probs.reshape(-1, numEvents);
         // Tensor samples2d = torch.multinomial(probs2d, 1, true, null).t();
         // return samples2d.reshape(batchShape);
-        return torch.multinomial(probs, 1, true, null);
+        return torch.multinomial(probs, 1, true, null); // LongTensor
     }
 
     // def log_prob(self, value):

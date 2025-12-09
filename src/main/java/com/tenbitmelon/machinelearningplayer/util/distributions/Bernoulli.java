@@ -1,4 +1,4 @@
-package com.tenbitmelon.machinelearningplayer.util.distrobutions;
+package com.tenbitmelon.machinelearningplayer.util.distributions;
 
 import org.bytedeco.pytorch.BCEWithLogitsLossOptions;
 import org.bytedeco.pytorch.Tensor;

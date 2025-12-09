@@ -137,7 +137,8 @@ public class Agent extends ServerPlayer {
         observationSectionControls.add(new TextControl("Latest Observation:"));
         observationSectionControls.add(new TextControl("Position in Block", tensorString(observation.positionInBlock())));
         observationSectionControls.add(new TextControl("Velocity", tensorString(observation.velocity())));
-        observationSectionControls.add(new TextControl("Look Direction", tensorString(observation.lookDirection())));
+        observationSectionControls.add(new TextControl("Yaw", tensorString(observation.yaw())));
+        observationSectionControls.add(new TextControl("Pitch", tensorString(observation.pitch())));
         observationSectionControls.add(new TextControl("Jumping", tensorString(observation.jumping())));
         observationSectionControls.add(new TextControl("Sprinting", tensorString(observation.sprinting())));
         observationSectionControls.add(new TextControl("Sneaking", tensorString(observation.sneaking())));
@@ -246,10 +247,12 @@ public class Agent extends ServerPlayer {
         this.reset();
         this.actionPack.stopAll();
 
-        float yRot = (float) (Math.random() * 180.0f - 90.0f);
-        float xRot = (float) (Math.random() * 360.0f - 180.0f);
-        this.snapTo(location.getX(), location.getY(), location.getZ(), yRot, xRot);
+        // float yRot = (float) (Math.random() * 360.0f - 180.0f); // Yaw
+        // float xRot = (float) (Math.random() * 180.0f - 90.0f); // Pitch
+        float xRot = 0.0f;
+        float yRot = 0.0f;
         this.teleportTo(((CraftWorld) location.getWorld()).getHandle(), location.getX(), location.getY(), location.getZ(), Set.of(), yRot, xRot, true);
+        this.snapTo(location.getX(), location.getY(), location.getZ(), yRot, xRot);
         this.setHealth(20.0F);
     }
 }

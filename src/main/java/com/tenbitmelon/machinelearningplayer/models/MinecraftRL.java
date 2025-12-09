@@ -2,9 +2,7 @@ package com.tenbitmelon.machinelearningplayer.models;
 
 import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
-import com.tenbitmelon.machinelearningplayer.util.distrobutions.Bernoulli;
-import com.tenbitmelon.machinelearningplayer.util.distrobutions.Categorical;
-import com.tenbitmelon.machinelearningplayer.util.distrobutions.Normal;
+import com.tenbitmelon.machinelearningplayer.util.distributions.Categorical;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.javacpp.LongPointer;
 import org.bytedeco.openblas.global.openblas;
@@ -13,12 +11,6 @@ import org.bytedeco.pytorch.Module;
 import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
-
-import java.util.Arrays;
-import java.util.Objects;
-
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class MinecraftRL extends Module {
 
@@ -133,14 +125,22 @@ public class MinecraftRL extends Module {
 
         LinearImpl otherLinear1 = createLinearLayer(otherInputsDim, 64);
         ReLUImpl otherReLU1 = new ReLUImpl();
-        LinearImpl otherLinear2 = createLinearLayer(64, otherFeaturesDim);
-        ReLUImpl otherReLU2 = new ReLUImpl();
+        // LinearImpl otherLinear2 = createLinearLayer(64, 64);
+        // ReLUImpl otherReLU2 = new ReLUImpl();
+        // LinearImpl otherLinear3 = createLinearLayer(64, 64);
+        // ReLUImpl otherReLU3 = new ReLUImpl();
+        LinearImpl otherLinear4 = createLinearLayer(64, otherFeaturesDim);
+        ReLUImpl otherReLU4 = new ReLUImpl();
 
         SequentialImpl otherInputsProcessor = new SequentialImpl();
         otherInputsProcessor.push_back("other_linear1", otherLinear1);
         otherInputsProcessor.push_back("other_relu1", otherReLU1);
-        otherInputsProcessor.push_back("other_linear2", otherLinear2);
-        otherInputsProcessor.push_back("other_relu2", otherReLU2);
+        // otherInputsProcessor.push_back("other_linear2", otherLinear2);
+        // otherInputsProcessor.push_back("other_relu2", otherReLU2);
+        // otherInputsProcessor.push_back("other_linear3", otherLinear3);
+        // otherInputsProcessor.push_back("other_relu3", otherReLU3);
+        otherInputsProcessor.push_back("other_linear4", otherLinear4);
+        otherInputsProcessor.push_back("other_relu4", otherReLU4);
 
         register_module("other_inputs_processor", otherInputsProcessor);
         this.otherInputsProcessor = otherInputsProcessor;
@@ -158,18 +158,26 @@ public class MinecraftRL extends Module {
         )
         */
 
-        long combinedFeaturesDim = cnnOutDim + otherFeaturesDim;
+        long combinedFeaturesDim = /** cnnOutDim + */otherFeaturesDim;
 
         LinearImpl sharedLinear1 = createLinearLayer(combinedFeaturesDim, 256);
         ReLUImpl sharedReLU1 = new ReLUImpl();
-        LinearImpl sharedLinear2 = createLinearLayer(256, sharedOutDim);
-        ReLUImpl sharedReLU2 = new ReLUImpl();
+        // LinearImpl sharedLinear2 = createLinearLayer(256, 256);
+        // ReLUImpl sharedReLU2 = new ReLUImpl();
+        // LinearImpl sharedLinear3 = createLinearLayer(256, 256);
+        // ReLUImpl sharedReLU3 = new ReLUImpl();
+        LinearImpl sharedLinear4 = createLinearLayer(256, sharedOutDim);
+        ReLUImpl sharedReLU4 = new ReLUImpl();
 
         SequentialImpl sharedNetwork = new SequentialImpl();
         sharedNetwork.push_back("shared_linear1", sharedLinear1);
         sharedNetwork.push_back("shared_relu1", sharedReLU1);
-        sharedNetwork.push_back("shared_linear2", sharedLinear2);
-        sharedNetwork.push_back("shared_relu2", sharedReLU2);
+        // sharedNetwork.push_back("shared_linear2", sharedLinear2);
+        // sharedNetwork.push_back("shared_relu2", sharedReLU2);
+        // sharedNetwork.push_back("shared_linear3", sharedLinear3);
+        // sharedNetwork.push_back("shared_relu3", sharedReLU3);
+        sharedNetwork.push_back("shared_linear4", sharedLinear4);
+        sharedNetwork.push_back("shared_relu4", sharedReLU4);
 
         register_module("shared_network", sharedNetwork);
         this.sharedNetwork = sharedNetwork;
@@ -428,6 +436,7 @@ public class MinecraftRL extends Module {
 
     // Tensor observation is [B, OBSERVATION_SPACE_SIZE]
     public States getStates(Tensor observation, LSTMState lstmState, Tensor done) {
+        // PointerScope scope = new PointerScope();
         // LOGGER.debug("--- Entering getStates ---");
         // LOGGER.debug("Initial observation shape: {}", observation.shape());
         // LOGGER.debug("Initial observation: {}", tensorString(observation));
@@ -476,11 +485,12 @@ public class MinecraftRL extends Module {
 
         // LOGGER.debug("Reshaped voxel data shape (for CNN): {}", voxelData.shape());
 
-        Tensor voxelFeatures = this.voxelCNN.forward(voxelData);
+        /// Tensor voxelFeatures = this.voxelCNN.forward(voxelData);
         Tensor otherFeatures = this.otherInputsProcessor.forward(otherInputs);
-        TensorVector tensorsToCombine = new TensorVector(voxelFeatures, otherFeatures);
-        Tensor combinedFeatures = torch.cat(tensorsToCombine, 1);
-        Tensor sharedFeatures = this.sharedNetwork.forward(combinedFeatures);
+        /// TensorVector tensorsToCombine = new TensorVector(voxelFeatures, otherFeatures);
+        /// Tensor combinedFeatures = torch.cat(tensorsToCombine, 1);
+        /// Tensor sharedFeatures = this.sharedNetwork.forward(combinedFeatures);
+        Tensor sharedFeatures = this.sharedNetwork.forward(otherFeatures);
 
         // LOGGER.debug("Voxel features shape (after CNN): {}", voxelFeatures.shape());
         // LOGGER.debug("Other features shape (after processing): {}", otherFeatures.shape());
@@ -507,7 +517,8 @@ public class MinecraftRL extends Module {
 
         // // LOGGER.debug("Shared features shape: {}", sharedFeatures.shape());
 
-        long batchSize = lstmState.hiddenState().size(1); // batchSize
+        Tensor startingHiddenState = lstmState.hiddenState();
+        long batchSize = startingHiddenState.size(1); // batchSize
         Tensor hidden = sharedFeatures.reshape(-1, batchSize, this.lstm.options().input_size().get()); // size (B, batchSize, input_size)
         done = done.reshape(-1, batchSize); // size (B, batchSize)
 
@@ -516,8 +527,10 @@ public class MinecraftRL extends Module {
         TensorVector newHidden = new TensorVector();
         // Tensor newHidden = torch.zeros(new long[]{seqLen, batchSize, this.lstmHiddenSize}, new TensorOptions(TrainingManager.device));
 
-        Tensor hiddenState = lstmState.hiddenState().clone();
+        Tensor hiddenState = startingHiddenState.clone();
         Tensor cellState = lstmState.cellState().clone();
+
+        startingHiddenState.close();
 
         Tensor ones = torch.ones_like(done, new TensorOptions(TrainingManager.device), null); // size (B, batchSize)
         Tensor oneSubDone = ones.sub_(done); // size (B, batchSize)
@@ -536,6 +549,9 @@ public class MinecraftRL extends Module {
             T_TensorTensor_T inputState = new T_TensorTensor_T(hiddenState, cellState);
             T_TensorT_TensorTensor_T_T hNew_LSTMState = this.lstm.forward(h, inputState);
 
+            hiddenState.close();
+            cellState.close();
+
             newHidden.push_back(hNew_LSTMState.get0());
             // newHidden.index_copy_(0, torch.tensor(i), hNew_LSTMState.get0());
             // newHidden.narrow(0, i, 1).copy_(hNew_LSTMState.get0());
@@ -544,6 +560,7 @@ public class MinecraftRL extends Module {
             T_TensorTensor_T outState = hNew_LSTMState.get1();
             hiddenState = outState.get0();
             cellState = outState.get1();
+            // hNew_LSTMState.close();
         }
         Tensor newHiddenTensor = torch.flatten(torch.cat(newHidden), 0, 1);
         // Tensor newHiddenTensor = torch.flatten(newHidden, 0, 1);
@@ -551,6 +568,8 @@ public class MinecraftRL extends Module {
         /*
         return new_hidden, lstm_state
          */
+
+        // scope.close();
 
         return new States(newHiddenTensor, lstmState);
     }
@@ -586,6 +605,7 @@ public class MinecraftRL extends Module {
 
         States states = this.getStates(observation, lstmState, done);
         Tensor sharedFeatures = states.newHiddenTensor;
+        lstmState = states.lstmState;
 
         // LOGGER.debug("Shared features shape for actor/critic heads: {}", sharedFeatures.shape());
 
@@ -617,21 +637,22 @@ public class MinecraftRL extends Module {
         strafing_move_dist = torch.distributions.Categorical(logits=strafing_move_logits)
          */
 
-        Tensor lookMeans = torch.tanh(this.actorLookChangeMean.forward(sharedFeatures));
-        Tensor lookStd = torch.exp(this.actorLookChangeLogSTD.expand(lookMeans.shape()));
-        Normal lookDist = new Normal(lookMeans, lookStd);
+        // Tensor lookMeans = torch.tanh(this.actorLookChangeMean.forward(sharedFeatures));
+        /// Tensor lookMeans = this.actorLookChangeMean.forward(sharedFeatures);
+        /// Tensor lookStd = torch.exp(this.actorLookChangeLogSTD.expand(lookMeans.shape()));
+        /// Normal lookDist = new Normal(lookMeans, lookStd);
         // LOGGER.debug("Look means shape: {}, Look std shape: {}", lookMeans.shape(), lookStd.shape());
 
-        Tensor sprintLogits = this.actorSprintKey.forward(sharedFeatures);
-        Bernoulli sprintDist = new Bernoulli(sprintLogits);
+        /// Tensor sprintLogits = this.actorSprintKey.forward(sharedFeatures);
+        /// Bernoulli sprintDist = new Bernoulli(sprintLogits);
         // LOGGER.debug("Sprint logits shape: {}", sprintLogits.shape());
 
-        Tensor sneakLogits = this.actorSneakKey.forward(sharedFeatures);
-        Bernoulli sneakDist = new Bernoulli(sneakLogits);
+        /// Tensor sneakLogits = this.actorSneakKey.forward(sharedFeatures);
+        /// Bernoulli sneakDist = new Bernoulli(sneakLogits);
         // LOGGER.debug("Sneak logits shape: {}", sneakLogits.shape());
 
-        Tensor jumpLogits = this.actorJumpKey.forward(sharedFeatures);
-        Bernoulli jumpDist = new Bernoulli(jumpLogits);
+        /// Tensor jumpLogits = this.actorJumpKey.forward(sharedFeatures);
+        /// Bernoulli jumpDist = new Bernoulli(jumpLogits);
         // LOGGER.debug("Jump logits shape: {}", jumpLogits.shape());
 
         Tensor forwardMoveLogits = this.actorForwardMoveKeys.forward(sharedFeatures); // Shape: (B, 3)
@@ -672,10 +693,10 @@ public class MinecraftRL extends Module {
 
         if (action == null) {
             // LOGGER.debug("Action is null, sampling new actions.");
-            Tensor lookSample = lookDist.sample(); // Correctly sampling continuous values
-            Tensor sprintSample = sprintDist.sample(); // Correctly sampling discrete values (0 or 1)
-            Tensor sneakSample = sneakDist.sample();
-            Tensor jumpSample = jumpDist.sample();
+            /// Tensor lookSample = lookDist.sample(); // Correctly sampling continuous values
+            /// Tensor sprintSample = sprintDist.sample(); // Correctly sampling discrete values (0 or 1)
+            /// Tensor sneakSample = sneakDist.sample();
+            /// Tensor jumpSample = jumpDist.sample();
             Tensor forwardMoveSample = forwardMoveDist.sample();
             Tensor strafingMoveSample = strafingMoveDist.sample();
             // LOGGER.debug("Sampled actions shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
@@ -688,8 +709,16 @@ public class MinecraftRL extends Module {
             // LOGGER.debug("Move sample: {}", tensorString(moveSample));
 
             // Concatenate along the last dimension -> flat per-sample vector
-            // Resulting shape: (B, Look(2), Sprint(1), Sneak(1), Jump(1), Long(1), Lat(1)) = (B, 7)
-            action = torch.cat(new TensorVector(lookSample, sprintSample, sneakSample, jumpSample, forwardMoveSample, strafingMoveSample), -1);
+            // Resulting shape: (B, 7)
+            // Jump(0, 1), Sprint(1, 1), Sneak(2, 1), Look(3, 2), ForwardMove(5, 1), StrafingMove(6, 1)
+            action = torch.cat(new TensorVector(
+                /// jumpSample,
+                /// sprintSample,
+                /// sneakSample,
+                /// lookSample,
+                forwardMoveSample,
+                strafingMoveSample
+            ), -1).to(torch.ScalarType.Float);
             // LOGGER.debug("Concatenated action: {}", tensorString(action));
         }
 
@@ -721,23 +750,29 @@ public class MinecraftRL extends Module {
         )
          */
 
-        Tensor lookAction = action.narrow(-1, 0, 2);
-        Tensor logProbsLook = lookDist.logProb(lookAction).sum(-1);
-        Tensor sprintAction = action.narrow(-1, 2, 1);
-        Tensor logProbsSprint = sprintDist.logProb(sprintAction).squeeze(-1);
-        Tensor sneakAction = action.narrow(-1, 3, 1);
-        Tensor logProbsSneak = sneakDist.logProb(sneakAction).squeeze(-1);
-        Tensor jumpAction = action.narrow(-1, 4, 1);
-        Tensor logProbsJump = jumpDist.logProb(jumpAction).squeeze(-1);
-        Tensor forwardMoveAction = action.narrow(-1, 5, 1);
+        /// Tensor jumpAction = action.narrow(-1, 0, 1);
+        /// Tensor logProbsJump = jumpDist.logProb(jumpAction).squeeze(-1);
+        /// Tensor sprintAction = action.narrow(-1, 1, 1);
+        /// Tensor logProbsSprint = sprintDist.logProb(sprintAction).squeeze(-1);
+        /// Tensor sneakAction = action.narrow(-1, 2, 1);
+        /// Tensor logProbsSneak = sneakDist.logProb(sneakAction).squeeze(-1);
+        /// Tensor lookAction = action.narrow(-1, 3, 2);
+        /// Tensor logProbsLook = lookDist.logProb(lookAction).sum(-1);
+        /// Tensor forwardMoveAction = action.narrow(-1, 5, 1);
+        /// Tensor logProbsForwardMove = forwardMoveDist.logProb(forwardMoveAction);
+        /// Tensor strafingMoveAction = action.narrow(-1, 6, 1);
+        /// Tensor logProbsStrafingMove = strafingMoveDist.logProb(strafingMoveAction);
+        Tensor forwardMoveAction = action.narrow(-1, 0, 1);
         Tensor logProbsForwardMove = forwardMoveDist.logProb(forwardMoveAction);
-        Tensor strafingMoveAction = action.narrow(-1, 6, 1);
+        Tensor strafingMoveAction = action.narrow(-1, 1, 1);
         Tensor logProbsStrafingMove = strafingMoveDist.logProb(strafingMoveAction);
+
         // LOGGER.debug("Log probs shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
         //     logProbsLook.shape(), logProbsSprint.shape(), logProbsSneak.shape(), logProbsJump.shape(), logProbsMove.shape());
 
-        Tensor totalLogProbs = logProbsLook.add(logProbsSprint).add(logProbsSneak)
-            .add(logProbsJump).add(logProbsForwardMove).add(logProbsStrafingMove);
+        /// Tensor totalLogProbs = logProbsLook.add(logProbsSprint).add(logProbsSneak)
+        ///     .add(logProbsJump).add(logProbsForwardMove).add(logProbsStrafingMove);
+        Tensor totalLogProbs = logProbsForwardMove.add(logProbsStrafingMove);
         // LOGGER.debug("Total log probs shape: {}", totalLogProbs.shape());
 
         /*
@@ -752,17 +787,20 @@ public class MinecraftRL extends Module {
         )
          */
 
-        Tensor entropyLook = lookDist.entropy().sum(-1);
-        Tensor entropySprint = sprintDist.entropy().squeeze(-1);
-        Tensor entropySneak = sneakDist.entropy().squeeze(-1);
-        Tensor entropyJump = jumpDist.entropy().squeeze(-1);
+        /// Tensor entropyJump = jumpDist.entropy().squeeze(-1);
+        /// Tensor entropySprint = sprintDist.entropy().squeeze(-1);
+        /// Tensor entropySneak = sneakDist.entropy().squeeze(-1);
+        /// Tensor lookEntropy = lookDist.entropy();
+        /// Tensor entropyLook = lookEntropy.sum(-1);
+        /// lookEntropy.close();
         Tensor entropyForwardMove = forwardMoveDist.entropy();
         Tensor entropyStrafingMove = strafingMoveDist.entropy();
         // LOGGER.debug("Entropy shapes: look={}, sprint={}, sneak={}, jump={}, move={}",
         //     entropyLook.shape(), entropySprint.shape(), entropySneak.shape(), entropyJump.shape(), entropyMove.shape());
 
-        Tensor totalEntropy = entropyLook.add(entropySprint).add(entropySneak)
-            .add(entropyJump).add(entropyForwardMove).add(entropyStrafingMove);
+        /// Tensor totalEntropy = entropyLook.add(entropySprint).add(entropySneak)
+        ///     .add(entropyJump).add(entropyForwardMove).add(entropyStrafingMove);
+        Tensor totalEntropy = entropyForwardMove.add(entropyStrafingMove);
         // LOGGER.debug("Total entropy shape: {}", totalEntropy.shape());
 
         /*
@@ -784,6 +822,7 @@ public class MinecraftRL extends Module {
             lstm_state,
         )
          */
+
 
         // LOGGER.debug("--- Exiting getActionAndValue ---");
         return new ActionAndValue(
@@ -811,6 +850,7 @@ public class MinecraftRL extends Module {
         }
         InputArchive inputArchive = new InputArchive();
         inputArchive.load_from("model_files/minecraft_rl_checkpoint_" + iteration + ".pt");
+        System.out.println("Loading MinecraftRL checkpoint from iteration " + iteration);
         this.load(inputArchive);
 
     }
@@ -821,7 +861,7 @@ public class MinecraftRL extends Module {
      * hiddenState Shape (numEnvs, batchSize, hiddenSize)
      * cellState   Shape (numEnvs, batchSize, hiddenSize)
      */
-    public static final class LSTMState {
+    public static final class LSTMState implements AutoCloseable {
         private T_TensorTensor_T lstmState;
 
         public LSTMState(T_TensorTensor_T lstmState) {this.lstmState = lstmState;}
@@ -842,7 +882,31 @@ public class MinecraftRL extends Module {
 
         @Override
         public LSTMState clone() {
-            return new LSTMState(this.hiddenState().clone(), this.cellState().clone());
+            Tensor hiddenState = this.hiddenState();
+            Tensor cellState = this.cellState();
+            Tensor clonedHidden = hiddenState.clone();
+            Tensor clonedCell = cellState.clone();
+            hiddenState.close();
+            cellState.close();
+            return new LSTMState(clonedHidden, clonedCell);
+        }
+
+        @Override
+        public void close() {
+            this.lstmState.get0().close();
+            this.lstmState.get1().close();
+            this.lstmState.close();
+        }
+
+        public void retainReference() {
+            this.lstmState.get0().retainReference();
+            this.lstmState.get1().retainReference();
+            this.lstmState.retainReference();
+        }
+
+        public void copy_(LSTMState lstmState) {
+            this.hiddenState().copy_(lstmState.hiddenState());
+            this.cellState().copy_(lstmState.cellState());
         }
     }
 

@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
+import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.pytorch.cuda.DeviceStats;
 import org.bytedeco.pytorch.global.torch_cuda;
 import org.slf4j.event.Level;
@@ -7,6 +8,7 @@ import org.slf4j.event.Level;
 import java.util.Arrays;
 import java.util.HashMap;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 import static com.tenbitmelon.machinelearningplayer.models.TrainingManager.device;
 
 public class Logger {
@@ -46,10 +48,13 @@ public class Logger {
     public void memory() {
         // StackTraceElement stackTraceElement = Thread.currentThread().getStackTrace()[2];
         // DeviceStats deviceStats = torch_cuda.getAllocator().getDeviceStats(device.index());
-        // log(Level.INFO, "{},{},{}",
+        // long nativeUsed = Pointer.physicalBytes(); // in bytes
+        // log(Level.INFO, "T:{},\tC:{}\tL:{},\tA:{},\tN:{}",
         //     System.currentTimeMillis(),
+        //     stackTraceElement.getClassName(),
         //     stackTraceElement.getLineNumber(),
-        //     deviceStats.allocated_bytes().current()
+        //     deviceStats.allocated_bytes().current(), // in bytes
+        //     nativeUsed
         // );
     }
 

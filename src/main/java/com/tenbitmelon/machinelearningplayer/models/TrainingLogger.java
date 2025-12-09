@@ -32,7 +32,7 @@ public class TrainingLogger {
             String filePath = logDir + "/" + experimentId + ".csv";
             this.writer = new BufferedWriter(new FileWriter(filePath, true));
 
-            writer.write("timestamp,iteration,learning_rate,value_loss,policy_loss,entropy,old_approx_kl,approx_kl,clipfrac,explained_variance,iteration_time,SPS,num_truncations,average_rewards\n");
+            writer.write("timestamp,iteration,learning_rate,value_loss,policy_loss,entropy,old_approx_kl,approx_kl,clipfrac,explained_variance,iteration_time,SPS,num_terminations,num_truncations,average_rewards,gpu_mem_used,java_native_used\n");
             writer.flush();
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -41,13 +41,14 @@ public class TrainingLogger {
 
 
     public void logStep(long iteration, double learningRate, double valueLoss, double policyLoss, double entropy,
-                        Double oldApproxKl, Double approxKl, double clipfrac, double explainedVariance, double iterationTime, double sps, int numTerminations, double averageRewards) throws IOException {
+                        Double oldApproxKl, Double approxKl, double clipfrac, double explainedVariance, double iterationTime, double sps, int numTerminations, int numTruncations, double averageRewards, long gpuMemUsed, long javaNativeUsed) throws IOException {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        writer.write(String.format("%s,%d,%.6f,%.6f,%.6f,%.6f,%s,%s,%.6f,%.6f,%.6f,%.6f,%d,%.6f\n",
+        writer.write(String.format("%s,%d,%.6f,%.6f,%.6f,%.6f,%s,%s,%.6f,%.6f,%.6f,%.6f,%d,%d,%.6f,%d,%d\n",
             timestamp, iteration, learningRate, valueLoss, policyLoss, entropy,
             oldApproxKl != null ? String.format("%.6f", oldApproxKl) : "",
             approxKl != null ? String.format("%.6f", approxKl) : "",
-            clipfrac, explainedVariance, iterationTime, sps, numTerminations, averageRewards));
+            clipfrac, explainedVariance, iterationTime, sps, numTerminations, numTruncations, averageRewards,
+            gpuMemUsed, javaNativeUsed));
         writer.flush();
     }
 

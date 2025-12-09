@@ -6,7 +6,7 @@ public class ExperimentConfig {
     /**
      * The learning rate of the optimizer.
      */
-    public final float learningRate = 3e-5f;
+    public final float learningRate = 3e-4f;
     /**
      * The number of parallel game environments.
      */
@@ -38,7 +38,7 @@ public class ExperimentConfig {
     /**
      * The surrogate clipping coefficient.
      */
-    public final float clipCoef = 0.1f;
+    public final float clipCoef = 0.2f;
     /**
      * Toggles whether to use a clipped loss for the value function, as per the paper.
      */
@@ -46,7 +46,7 @@ public class ExperimentConfig {
     /**
      * Coefficient of the entropy.
      */
-    public final float entCoef = 0.01f;
+    public final float entCoef = 0.001f;
     /**
      * Coefficient of the value function.
      */
