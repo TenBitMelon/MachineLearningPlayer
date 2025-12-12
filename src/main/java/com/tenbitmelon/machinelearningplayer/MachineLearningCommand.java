@@ -41,6 +41,11 @@ public class MachineLearningCommand {
                 ctx.getSource().getSender().sendPlainMessage("Run training " + (TrainingManager.runTraining ? "enabled" : "disabled"));
                 return Command.SINGLE_SUCCESS;
             }))
+            .then(Commands.literal("checkpoint").executes(ctx -> {
+                int it = TrainingManager.createCheckpoint();
+                ctx.getSource().getSender().sendPlainMessage("Checkpoint created for iteration " + it);
+                return Command.SINGLE_SUCCESS;
+            }))
             .then(Commands.literal("clearUiCallbacks").executes(ctx -> {
                 ClickCallbackProviderImpl.CallbackManager callbackManager = ClickCallbackProviderImpl.CALLBACK_MANAGER;
 

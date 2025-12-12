@@ -6,11 +6,11 @@ public class ExperimentConfig {
     /**
      * The learning rate of the optimizer.
      */
-    public final float learningRate = 3e-4f;
+    public final float learningRate = 2.5e-4f;
     /**
      * The number of parallel game environments.
      */
-    public final int numEnvs = 64;
+    public final int numEnvs = 32;
     /**
      * Toggle learning rate annealing for policy and value networks.
      */
@@ -30,7 +30,7 @@ public class ExperimentConfig {
     /**
      * The K epochs to update the policy.
      */
-    public final int updateEpochs = 8;
+    public final int updateEpochs = 4;
     /**
      * Toggles advantages normalization.
      */
@@ -38,7 +38,7 @@ public class ExperimentConfig {
     /**
      * The surrogate clipping coefficient.
      */
-    public final float clipCoef = 0.2f;
+    public final float clipCoef = 0.1f;
     /**
      * Toggles whether to use a clipped loss for the value function, as per the paper.
      */
@@ -46,7 +46,7 @@ public class ExperimentConfig {
     /**
      * Coefficient of the entropy.
      */
-    public final float entCoef = 0.001f;
+    public final float entCoef = 0.01f;
     /**
      * Coefficient of the value function.
      */

@@ -6,8 +6,6 @@ import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
-import java.util.Arrays;
-
 public record VectorStepResult(Observation[] observations, double[] rewards, boolean[] terminated,
                                boolean[] truncated, Info[] infos) {
     public int[] logicalOrTerminationsAndTruncations() {
@@ -31,7 +29,7 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
 
         TensorVector tensorVector = new TensorVector();
         for (Observation observation : observations) {
-            Tensor tensor = observation.toTensor();
+            Tensor tensor = observation.tensor();
             tensorVector.push_back(tensor);
         }
         return torch.stack(tensorVector, 0);  // Stack along batch dimension

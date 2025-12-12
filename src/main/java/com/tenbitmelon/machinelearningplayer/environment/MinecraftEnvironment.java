@@ -47,11 +47,6 @@ public class MinecraftEnvironment {
 
     public MinecraftEnvironment(ExperimentConfig args) {
         this.args = args;
-        // LOGGER.debug("Initializing Minecraft environment");
-        // int w = (int) Math.floor((Math.sqrt(8 * nextEnvironmentId + 1) - 1) / 2);
-        // int t = (w * w + w) / 2;
-        // roomLocation = new Location(world, (w - (nextEnvironmentId - t)) * 16, 0, (nextEnvironmentId - t) * 16);
-
         World world = Bukkit.getWorlds().getFirst();
 
         int[] coords = szudzikUnpairing(nextEnvironmentId);
@@ -79,13 +74,6 @@ public class MinecraftEnvironment {
                 world.getBlockAt(startX + x, 0, startZ + z).setType(Material.BARRIER);
             }
         }
-
-        // world.getBlockAt(startX + 8, -3, startZ + 8).setType(Material.BEACON);
-        // for (int x = -1; x <= 1; x++) {
-        //     for (int z = -1; z <= 1; z++) {
-        //         world.getBlockAt(startX + 8 + x, -4, startZ + 8 + z).setType(Material.IRON_BLOCK);
-        //     }
-        // }
 
         randomConcrete = new Material[]{
             Material.WHITE_CONCRETE,
@@ -141,7 +129,7 @@ public class MinecraftEnvironment {
             throw new IllegalArgumentException("Invalid min/max distance");
         }
 
-        // Uniform distribution over the annulus area
+        // Uniform distribution over the area
         double angle = Math.random() * 2 * Math.PI;
         double radius = Math.sqrt(Math.random() * (maxDist * maxDist - minDist * minDist) + minDist * minDist);
 
@@ -156,7 +144,7 @@ public class MinecraftEnvironment {
 
         // 1. Fill voxel grid data
         Vec3 position = agent.position();
-        World world = roomLocation.getWorld();
+        // World world = roomLocation.getWorld();
 
         /*for (int x = -GRID_SIZE_XZ / 2; x < GRID_SIZE_XZ / 2; x++) {
             for (int z = -GRID_SIZE_XZ / 2; z < GRID_SIZE_XZ / 2; z++) {
@@ -175,91 +163,85 @@ public class MinecraftEnvironment {
                     // else stays 0.0f (default)
                 }
             }
-        }*/
-
-        int index = Observation.OFFSET_VOXEL_GRID;
-        for (int x = -HALF_GRID_SIZE_XZ; x < HALF_GRID_SIZE_XZ; x++) {
-            for (int z = -HALF_GRID_SIZE_XZ; z < HALF_GRID_SIZE_XZ; z++) {
-                for (int y = -HALF_GRID_SIZE_Y; y < HALF_GRID_SIZE_Y; y++) {
-
-                    if (y < 0) {
-                        observationData[index] = 0.5f;
-                        // TODO: Adapt this when the goal eventually has different y positions
-                    } else if (goalPosition != null && (int) (position.x() + x) == (int) (goalPosition.x) && (int) (position.y() + y) == (int) (goalPosition.y) && (int) (position.z() + z) == (int) (goalPosition.z)) {
-                        observationData[index] = 1.0f;
-                    } else {
-                        observationData[index] = 0.0f;
-                    }
-
-                    index++;
-
-                    // new TextDisplayBuilder(roomLocation.getWorld())
-                    //     .text(observationData[index] + " " + index).build().teleport(new Location(world, position.x() + x, position.y() + y, position.z() + z));
-                }
-            }
         }
+        // int index = Observation.OFFSET_VOXEL_GRID;
+        // for (int x = -HALF_GRID_SIZE_XZ; x < HALF_GRID_SIZE_XZ; x++) {
+        //     for (int z = -HALF_GRID_SIZE_XZ; z < HALF_GRID_SIZE_XZ; z++) {
+        //         for (int y = -HALF_GRID_SIZE_Y; y < HALF_GRID_SIZE_Y; y++) {
+        //
+        //             if (y < 0) {
+        //                 observationData[index] = 0.5f;
+        //                 // TODO: Adapt this when the goal eventually has different y positions
+        //             } else if (goalPosition != null && (int) (position.x() + x) == (int) (goalPosition.x) && (int) (position.y() + y) == (int) (goalPosition.y) && (int) (position.z() + z) == (int) (goalPosition.z)) {
+        //                 observationData[index] = 1.0f;
+        //             } else {
+        //                 observationData[index] = 0.0f;
+        //             }
+        //
+        //             index++;
+        //
+        //             // new TextDisplayBuilder(roomLocation.getWorld())
+        //             //     .text(observationData[index] + " " + index).build().teleport(new Location(world, position.x() + x, position.y() + y, position.z() + z));
+        //         }
+        //     }
+        // } */
 
-        // 2. Position in block (3 values)
-        observationData[Observation.OFFSET_POSITION_IN_BLOCK + 0] = (float) (position.x() - (int) (position.x()));
-        observationData[Observation.OFFSET_POSITION_IN_BLOCK + 1] = (float) (position.y() - (int) (position.y()));
-        observationData[Observation.OFFSET_POSITION_IN_BLOCK + 2] = (float) (position.z() - (int) (position.z()));
+        // // 2. Position in block (3 values)
+        // observationData[Observation.OFFSET_POSITION_IN_BLOCK + 0] = (float) (position.x() - (int) (position.x()));
+        // observationData[Observation.OFFSET_POSITION_IN_BLOCK + 1] = (float) (position.y() - (int) (position.y()));
+        // observationData[Observation.OFFSET_POSITION_IN_BLOCK + 2] = (float) (position.z() - (int) (position.z()));
 
-        // 3. Velocity (3 values)
-        Vec3 agentVelocity = agent.getDeltaMovement();
-        observationData[Observation.OFFSET_VELOCITY + 0] = (float) agentVelocity.x() / 5.0f; // TODO: Normalize based on max expected velocity
-        observationData[Observation.OFFSET_VELOCITY + 1] = (float) agentVelocity.y() / 20.0f; // falling from 15 blocks is 26.41 m/s (8 blocks is 20.95 m/s)
-        observationData[Observation.OFFSET_VELOCITY + 2] = (float) agentVelocity.z() / 5.0f;
+        // // 3. Velocity (3 values)
+        // Vec3 agentVelocity = agent.getDeltaMovement();
+        // observationData[Observation.OFFSET_VELOCITY + 0] = (float) agentVelocity.x() / 5.0f; // TODO: Normalize based on max expected velocity
+        // observationData[Observation.OFFSET_VELOCITY + 1] = (float) agentVelocity.y() / 20.0f; // falling from 15 blocks is 26.41 m/s (8 blocks is 20.95 m/s)
+        // observationData[Observation.OFFSET_VELOCITY + 2] = (float) agentVelocity.z() / 5.0f;
 
-        // 4. Look direction (3 values)
-        float yawRad = (float) Math.toRadians(agent.getYRot());
-        float pitchRad = (float) Math.toRadians(agent.getXRot());
-        observationData[Observation.OFFSET_YAW + 0] = (float) Math.sin(yawRad);
-        observationData[Observation.OFFSET_YAW + 1] = (float) Math.cos(yawRad);
-        observationData[Observation.OFFSET_PITCH + 0] = (float) Math.sin(pitchRad);
-        observationData[Observation.OFFSET_PITCH + 1] = (float) Math.cos(pitchRad);
+        // // 4. Look direction (3 values)
+        // float yawRad = (float) Math.toRadians(agent.getYRot());
+        // float pitchRad = (float) Math.toRadians(agent.getXRot());
+        // observationData[Observation.OFFSET_YAW + 0] = (float) Math.sin(yawRad);
+        // observationData[Observation.OFFSET_YAW + 1] = (float) Math.cos(yawRad);
+        // observationData[Observation.OFFSET_PITCH + 0] = (float) Math.sin(pitchRad);
+        // observationData[Observation.OFFSET_PITCH + 1] = (float) Math.cos(pitchRad);
 
-        // 5. Boolean flags (4 values)
-        observationData[Observation.OFFSET_JUMPING] = agent.jumping ? 1.0f : 0.0f; // TODO: Remove this
-        observationData[Observation.OFFSET_SPRINTING] = agent.actionPack.sprinting ? 1.0f : 0.0f;
-        observationData[Observation.OFFSET_SNEAKING] = agent.actionPack.sneaking ? 1.0f : 0.0f;
-        observationData[Observation.OFFSET_ON_GROUND] = agent.onGround ? 1.0f : 0.0f;
+        // // 5. Boolean flags (4 values)
+        // observationData[Observation.OFFSET_JUMPING] = agent.jumping ? 1.0f : 0.0f; // TODO: Remove this
+        // observationData[Observation.OFFSET_SPRINTING] = agent.actionPack.sprinting ? 1.0f : 0.0f;
+        // observationData[Observation.OFFSET_SNEAKING] = agent.actionPack.sneaking ? 1.0f : 0.0f;
+        // observationData[Observation.OFFSET_ON_GROUND] = agent.onGround ? 1.0f : 0.0f;
 
-        // 6. Goal direction (3 values)
+        // 6. Goal direction (3 values) // TODO: Make this relative to the agent's look direction
         Vec3 goalDirectionVec = goalPosition.subtract(position).normalize();
+        // getYRot is in Degrees
+        // yRot expects Radians
+        float yawRadians = (float) Math.toRadians(agent.getYRot());
+        // yRot rotates clockwise around the Y axis, which is the opposite of what I expected
+        // so we don't need to negate the angle because its already doing that
+        goalDirectionVec = goalDirectionVec.yRot(yawRadians);
+
         observationData[Observation.OFFSET_GOAL_DIRECTION + 0] = (float) goalDirectionVec.x;
         observationData[Observation.OFFSET_GOAL_DIRECTION + 1] = (float) goalDirectionVec.y;
         observationData[Observation.OFFSET_GOAL_DIRECTION + 2] = (float) goalDirectionVec.z;
 
-        // Single tensor operation to set all data at once
-        // TODO: Construct on device
-        // TODO: or reuse the observations [numEnvs, obsSize] tensor and insert this observation into it
+        // 7. Goal distance (1 value)
+        float goalDistance = (float) Math.clamp(position.distanceTo(goalPosition) / 20.0f, 0.0, 1.0); // Normalize by a max expected distance // TODO: Make this a variable
+        observationData[Observation.OFFSET_GOAL_DISTANCE] = goalDistance;
+
         Tensor observationTensor = torch.tensor(observationData);
         Observation observation = new Observation(observationTensor);
 
-        // System.out.println("Observation: " + tensorString(observationTensor));
-
-        // Log the observation to the agent's debug log
         agent.displayObservation(observation);
 
         return observation;
-    }
-
-    public Info getInfo() {
-        double distanceToGoal = agent.position().distanceTo(goalPosition);
-
-        // TODO: I don't think this is used when called from Reset() so it can just be calculated in postTickStep()
-
-        Info info = new Info(distanceToGoal);
-        agent.displayInfo(info);
-
-        return info;
     }
 
 
     public ResetResult reset() {
         environmentLog.clearLines();
         this.currentStep = 0;
-        this.agent.reset(roomLocation.clone().add(8.5, 1.5, 8.5));
+
+        this.agent.reset(roomLocation.clone().add(8.5, 1.0, 8.5));
 
         if (goalPosition != null) {
             roomLocation.getWorld().getBlockAt((int) goalPosition.x, roomLocation.getBlockY(), (int) goalPosition.z).setType(randomConcrete);
@@ -268,29 +250,24 @@ public class MinecraftEnvironment {
         double[] randomPoint = getRandomPointInCircle(GRID_SIZE_XZ / 2f, GRID_SIZE_XZ);
         this.goalPosition = new Vec3(
             roomLocation.getX() + 8.5 + randomPoint[0],
-            roomLocation.getY() + 1,
+            roomLocation.getY() + 1.0,
             roomLocation.getZ() + 8.5 + randomPoint[1]
         );
 
         roomLocation.getWorld().getBlockAt((int) goalPosition.x, roomLocation.getBlockY(), (int) goalPosition.z).setType(Material.EMERALD_BLOCK);
 
         Observation observation = getObservation();
-        Info info = getInfo();
-        previousDistanceToGoal = info.distanceToGoal();
-        return new ResetResult(observation, info);
+        Vec2 goalDirection = new Vec2((float) randomPoint[0], (float) randomPoint[1]);
+        previousDistanceToGoal = goalDirection.length();
+        return new ResetResult(observation, new Info(previousDistanceToGoal));
     }
 
     public void preTickStep(Tensor actionTensor) {
-        // LOGGER.debug("Stepping in MinecraftEnvironment with actions");
         Action action = new Action(actionTensor);
 
-        // LOGGER.debug("Current step: {}, Action: {}", this.currentStep, tensorString(action.data));
-
+        this.currentStep++;
         agent.actionPack.stopAll();
 
-        this.currentStep++;
-
-        // LOGGER.debug("Updating agent action pack with action before: {}", agent.actionPack);
         /// boolean sneaking = action.sneaking() == 1;
         /// agent.actionPack.setSneaking(sneaking);
         /// if (!sneaking) {
@@ -300,85 +277,102 @@ public class MinecraftEnvironment {
         ///     agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
         /// }
 
-        /// Vec2 rotation = action.lookChange().scale(15.0f); // Scale to a reasonable rotation speed
-        // LOGGER.debug("Setting agent rotation: [{}, {}]", rotation.x, rotation.y);
-        /// agent.actionPack.turn(rotation); // Yaw, Pitch
+        Vec2 rotation = action.lookChange().scale(15.0f); // Scale to a reasonable rotation speed
+        agent.actionPack.turn(rotation); // Yaw, Pitch
 
-        // LOGGER.debug("Movement keys: {}", movementKeys);
         int moveForward = action.forwardMoveKey();
+        if (moveForward == 1) {
+            moveForward = 1;
+        } else if (moveForward == 2) {
+            moveForward = -1;
+        }
         int moveRight = action.strafeMoveKey();
-
-        // LOGGER.debug("Setting agent movement: forward={}, right={}", moveForward, moveRight);
+        if (moveRight == 1) {
+            moveRight = 1;
+        } else if (moveRight == 2) {
+            moveRight = -1;
+        }
 
         agent.actionPack.setForward(moveForward);
         agent.actionPack.setStrafing(moveRight);
-
-        // LOGGER.debug("Updating agent action pack with action after: {}", agent.actionPack);
     }
 
     public StepResult postTickStep() {
-        Info info = getInfo();
+        Vec3 position = agent.position();
+        Vec3 goalDirectionVec = goalPosition.subtract(position);
 
-        // Calculate rewards
-        double distanceToGoal = info.distanceToGoal();
+        float distanceToGoal = (float) goalDirectionVec.length();
 
-        // Simple distance-based reward (sparse)
-        double reward = 0.0;
-
-        // Big reward for reaching goal
+        boolean reachedGoal = distanceToGoal < GOAL_THRESHOLD;
         boolean terminated = false;
-        if (distanceToGoal < GOAL_THRESHOLD) {
-            reward = 100.0;
+
+        float reward = 0.0f;
+        if (reachedGoal) {
+            reward = 100.0f;
             terminated = true;
         } else {
-            // Negative reward proportional to distance (encourages getting closer)
-            reward = -distanceToGoal;
-
-            // Optional: XZ-only look direction bonus
-            Vec3 goalDirection = goalPosition.subtract(agent.position());
-            Vec3 goalDirectionXZ = new Vec3(goalDirection.x, 0, goalDirection.z).normalize();
-
-            Vec3 lookDirection = agent.getLookAngle();
-
-            double lookDotXZ = goalDirectionXZ.dot(lookDirection);
-            double lookBonus = ((lookDotXZ + 1) / 2.0) * 0.1; // Small bonus, 0 to 0.1
-
-            reward += lookBonus;
+            reward = -distanceToGoal * 0.1f;
+            terminated = false;
         }
 
         boolean truncated = this.currentStep > this.args.numSteps;
-        double deltaDistanceToGoal = distanceToGoal - previousDistanceToGoal;
+
+        Observation observation = getObservation();
+        Info info = new Info(distanceToGoal);
         previousDistanceToGoal = distanceToGoal;
 
+        return new StepResult(observation, reward, terminated, truncated, info);
 
-        // environmentLog.addLine(Component.newline().append(
-        //     Component.text(" S: " + currentStep).color(NamedTextColor.YELLOW),
-        //     Component.newline(),
-        //     Component.text(" D: "),
-        //     Component.text(String.format("%.2f", info.distanceToGoal())),
-        //     Component.newline(),
-        //     Component.text("ΔD: "),
-        //     Component.text(String.format("%.2f (%.2f)", deltaDistanceToGoal, deltaDistanceToGoal * 5.0))
-        //         .color(deltaDistanceToGoal > 0 ? NamedTextColor.GREEN : NamedTextColor.RED),
-        //     Component.newline(),
-        //     Component.text(" R: "),
-        //     Component.text(String.format("%.2f", reward))
-        //         .color(reward > 50 ? NamedTextColor.GOLD : reward > 0 ? NamedTextColor.GREEN : NamedTextColor.RED)
-        // ));
 
-        // new TextDisplayBuilder(roomLocation.getWorld())
-        //     .teleport(agent.position().multiply(1.0, 0.0, 1.0).add(0, 3 + currentStep / 1000.0, 0))
-        //     // Left quaternion and right quaternion. Need to rotate the text display to face directly up (ie around the x axis 90 degrees)
-        //     .text(String.format("%.2f", reward))
-        //     .billboard(Display.Billboard.CENTER);
-
-        // System.out.println(agent.position().x() + ", " +
-        //     agent.position().z() + ", " +
-        //     String.format("%.5f", info.distanceToGoal()) + ", " +
-        //     String.format("%.5f", deltaDistanceToGoal) + ", " +
-        //     String.format("%.5f", reward));
-
-        return new StepResult(getObservation(), reward, terminated, truncated, info);
+        // double reward = 0.0;
+        // boolean terminated = false;
+        //
+        // // 1. Calculate improvement (positive if closer, negative if farther)
+        // // Scale it up so the signal is strong (e.g., 1 block = 1.0 reward)
+        // double delta = (previousDistanceToGoal - distanceToGoal);
+        // reward += delta; // Scaling factor
+        //
+        // // 2. Goal Achievement
+        // if (distanceToGoal < GOAL_THRESHOLD) {
+        //     reward += 20.0; // Bonus for finishing
+        //     terminated = true;
+        // }
+        //
+        // // 3. Optional: Tiny time penalty to encourage speed (e.g., -0.01)
+        // reward -= 0.01;
+        //
+        // boolean truncated = this.currentStep > this.args.numSteps;
+        // previousDistanceToGoal = distanceToGoal;
+        //
+        // return new StepResult(getObservation(), reward, terminated, truncated, info);
+        //
+        //
+        // // environmentLog.addLine(Component.newline().append(
+        // //     Component.text(" S: " + currentStep).color(NamedTextColor.YELLOW),
+        // //     Component.newline(),
+        // //     Component.text(" D: "),
+        // //     Component.text(String.format("%.2f", info.distanceToGoal())),
+        // //     Component.newline(),
+        // //     Component.text("ΔD: "),
+        // //     Component.text(String.format("%.2f (%.2f)", deltaDistanceToGoal, deltaDistanceToGoal * 5.0))
+        // //         .color(deltaDistanceToGoal > 0 ? NamedTextColor.GREEN : NamedTextColor.RED),
+        // //     Component.newline(),
+        // //     Component.text(" R: "),
+        // //     Component.text(String.format("%.2f", reward))
+        // //         .color(reward > 50 ? NamedTextColor.GOLD : reward > 0 ? NamedTextColor.GREEN : NamedTextColor.RED)
+        // // ));
+        //
+        // // new TextDisplayBuilder(roomLocation.getWorld())
+        // //     .teleport(agent.position().multiply(1.0, 0.0, 1.0).add(0, 3 + currentStep / 1000.0, 0))
+        // //     // Left quaternion and right quaternion. Need to rotate the text display to face directly up (ie around the x axis 90 degrees)
+        // //     .text(String.format("%.2f", reward))
+        // //     .billboard(Display.Billboard.CENTER);
+        //
+        // // System.out.println(agent.position().x() + ", " +
+        // //     agent.position().z() + ", " +
+        // //     String.format("%.5f", info.distanceToGoal()) + ", " +
+        // //     String.format("%.5f", deltaDistanceToGoal) + ", " +
+        // //     String.format("%.5f", reward));
     }
 
     public boolean isReady() {

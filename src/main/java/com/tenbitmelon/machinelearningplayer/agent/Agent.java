@@ -135,15 +135,16 @@ public class Agent extends ServerPlayer {
 
         observationSectionControls.add(new TextControl(""));
         observationSectionControls.add(new TextControl("Latest Observation:"));
-        observationSectionControls.add(new TextControl("Position in Block", tensorString(observation.positionInBlock())));
-        observationSectionControls.add(new TextControl("Velocity", tensorString(observation.velocity())));
-        observationSectionControls.add(new TextControl("Yaw", tensorString(observation.yaw())));
-        observationSectionControls.add(new TextControl("Pitch", tensorString(observation.pitch())));
-        observationSectionControls.add(new TextControl("Jumping", tensorString(observation.jumping())));
-        observationSectionControls.add(new TextControl("Sprinting", tensorString(observation.sprinting())));
-        observationSectionControls.add(new TextControl("Sneaking", tensorString(observation.sneaking())));
-        observationSectionControls.add(new TextControl("On Ground", tensorString(observation.onGround())));
+        // observationSectionControls.add(new TextControl("Position in Block", tensorString(observation.positionInBlock())));
+        // observationSectionControls.add(new TextControl("Velocity", tensorString(observation.velocity())));
+        // observationSectionControls.add(new TextControl("Yaw", tensorString(observation.yaw())));
+        // observationSectionControls.add(new TextControl("Pitch", tensorString(observation.pitch())));
+        // observationSectionControls.add(new TextControl("Jumping", tensorString(observation.jumping())));
+        // observationSectionControls.add(new TextControl("Sprinting", tensorString(observation.sprinting())));
+        // observationSectionControls.add(new TextControl("Sneaking", tensorString(observation.sneaking())));
+        // observationSectionControls.add(new TextControl("On Ground", tensorString(observation.onGround())));
         observationSectionControls.add(new TextControl("Goal Direction", tensorString(observation.goalDirection())));
+        observationSectionControls.add(new TextControl("Goal Distance", tensorString(observation.goalDistance())));
 
         for (Control control : observationSectionControls) {
             debugWindow.addControl(control);
@@ -253,6 +254,5 @@ public class Agent extends ServerPlayer {
         float yRot = 0.0f;
         this.teleportTo(((CraftWorld) location.getWorld()).getHandle(), location.getX(), location.getY(), location.getZ(), Set.of(), yRot, xRot, true);
         this.snapTo(location.getX(), location.getY(), location.getZ(), yRot, xRot);
-        this.setHealth(20.0F);
     }
 }
