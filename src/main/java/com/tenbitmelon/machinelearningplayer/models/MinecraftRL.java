@@ -26,6 +26,8 @@ public class MinecraftRL extends Module {
     final Tensor yawLogSTD;
     final LinearImpl pitchMean;
     final Tensor pitchLogSTD;
+    final LinearImpl actorJumpKey;
+    final LinearImpl actorSprintSneakKeys;
     final LinearImpl critic;
 
     public MinecraftRL(SyncedVectorEnvironment environment) {
@@ -112,6 +114,17 @@ public class MinecraftRL extends Module {
         Tensor pitchLogSTD = torch.ones(new long[]{1}, new TensorOptions(torch.ScalarType.Float)).mul(new Scalar(-1.0f));
         register_parameter("pitch_logstd", pitchLogSTD);
         this.pitchLogSTD = pitchLogSTD;
+
+        // Jump
+        LinearImpl actorJumpKey = createLinearLayer(64, 2, 0.01); // 2 outputs: jump or not jump
+        register_module("actor_jump_key", actorJumpKey);
+        this.actorJumpKey = actorJumpKey;
+
+        // Sprint & Sneak
+
+        LinearImpl actorSprintSneakKeys = createLinearLayer(64, 3, 0.01); // 3 outputs: no sprint/sneak, sprint, sneak
+        register_module("actor_sprint_sneak_keys", actorSprintSneakKeys);
+        this.actorSprintSneakKeys = actorSprintSneakKeys;
 
         /*
         self.critic = layer_init(nn.Linear(64, 1), std=1)
@@ -353,6 +366,16 @@ public class MinecraftRL extends Module {
         Tensor pitchStd = torch.exp(this.pitchLogSTD);
         Normal pitchDist = new Normal(pitchMean, pitchStd);
 
+        // Jump
+
+        Tensor jumpKeyLogits = this.actorJumpKey.forward(hidden);
+        Categorical jumpKeyProbs = new Categorical(jumpKeyLogits);
+
+        // Sprint & Sneak
+
+        Tensor sprintSneakKeysLogits = this.actorSprintSneakKeys.forward(hidden);
+        Categorical sprintSneakKeysProbs = new Categorical(sprintSneakKeysLogits);
+
         /*
         if action is None:
             x_action = x_probs.sample()
@@ -371,15 +394,21 @@ public class MinecraftRL extends Module {
         Tensor strafingMoveKeysAction;
         Tensor yawAction;
         Tensor pitchAction;
+        Tensor jumpKeyAction;
+        Tensor sprintSneakKeysAction;
 
         if (action == null) {
             forwardMoveKeysAction = forwardMoveKeysProbs.sample(); // LongTensor
             strafingMoveKeysAction = strafingMoveKeysProbs.sample(); // LongTensor
             yawAction = yawDist.sample(); // FloatTensor
             pitchAction = pitchDist.sample(); // FloatTensor
+            jumpKeyAction = jumpKeyProbs.sample(); // LongTensor
+            sprintSneakKeysAction = sprintSneakKeysProbs.sample(); // LongTensor
 
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
             action = torch.stack(new TensorVector(
+                jumpKeyAction.to(torch.ScalarType.Float),
+                sprintSneakKeysAction.to(torch.ScalarType.Float),
                 yawAction,
                 pitchAction,
                 forwardMoveKeysAction.to(torch.ScalarType.Float),
@@ -387,10 +416,12 @@ public class MinecraftRL extends Module {
             ), 1);
         } else {
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
-            yawAction = action.narrow(1, 0, 1).squeeze(1).to(yawMean.dtype());
-            pitchAction = action.narrow(1, 1, 1).squeeze(1).to(pitchMean.dtype());
-            forwardMoveKeysAction = action.narrow(1, 2, 1).squeeze(1).to(torch.ScalarType.Long);
-            strafingMoveKeysAction = action.narrow(1, 3, 1).squeeze(1).to(torch.ScalarType.Long);
+            jumpKeyAction = action.narrow(1, 0, 1).squeeze(1).to(torch.ScalarType.Long);
+            sprintSneakKeysAction = action.narrow(1, 1, 1).squeeze(1).to(torch.ScalarType.Long);
+            yawAction = action.narrow(1, 2, 1).squeeze(1).to(yawMean.dtype());
+            pitchAction = action.narrow(1, 3, 1).squeeze(1).to(pitchMean.dtype());
+            forwardMoveKeysAction = action.narrow(1, 4, 1).squeeze(1).to(torch.ScalarType.Long);
+            strafingMoveKeysAction = action.narrow(1, 5, 1).squeeze(1).to(torch.ScalarType.Long);
         }
 
         /*
@@ -405,12 +436,15 @@ public class MinecraftRL extends Module {
         Tensor strafingMoveKeysLogProbs = strafingMoveKeysProbs.logProb(strafingMoveKeysAction);
         Tensor yawLogProbs = yawDist.logProb(yawAction);
         Tensor pitchLogProbs = pitchDist.logProb(pitchAction);
-
+        Tensor jumpKeyLogProbs = jumpKeyProbs.logProb(jumpKeyAction);
+        Tensor sprintSneakKeysLogProbs = sprintSneakKeysProbs.logProb(sprintSneakKeysAction);
 
         Tensor totalLogProbs = forwardMoveKeysLogProbs
             .add(strafingMoveKeysLogProbs)
             .add(yawLogProbs)
-            .add(pitchLogProbs);
+            .add(pitchLogProbs)
+            .add(jumpKeyLogProbs)
+            .add(sprintSneakKeysLogProbs);
 
         /*
         entropy = x_probs.entropy() + y_probs.entropy() + rot_dist.entropy()
@@ -420,11 +454,15 @@ public class MinecraftRL extends Module {
         Tensor strafingMoveKeysEntropy = strafingMoveKeysProbs.entropy();
         Tensor yawEntropy = yawDist.entropy();
         Tensor pitchEntropy = pitchDist.entropy();
+        Tensor jumpKeyEntropy = jumpKeyProbs.entropy();
+        Tensor sprintSneakKeysEntropy = sprintSneakKeysProbs.entropy();
 
         Tensor totalEntropy = forwardMoveKeysEntropy
             .add(strafingMoveKeysEntropy)
             .add(yawEntropy)
-            .add(pitchEntropy);
+            .add(pitchEntropy)
+            .add(jumpKeyEntropy)
+            .add(sprintSneakKeysEntropy);
 
         /*
         return (

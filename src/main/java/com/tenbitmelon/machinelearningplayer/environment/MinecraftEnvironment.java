@@ -205,11 +205,10 @@ public class MinecraftEnvironment {
         // observationData[Observation.OFFSET_PITCH + 0] = (float) Math.sin(pitchRad);
         // observationData[Observation.OFFSET_PITCH + 1] = (float) Math.cos(pitchRad);
 
-        // // 5. Boolean flags (4 values)
-        // observationData[Observation.OFFSET_JUMPING] = agent.jumping ? 1.0f : 0.0f; // TODO: Remove this
-        // observationData[Observation.OFFSET_SPRINTING] = agent.actionPack.sprinting ? 1.0f : 0.0f;
-        // observationData[Observation.OFFSET_SNEAKING] = agent.actionPack.sneaking ? 1.0f : 0.0f;
-        // observationData[Observation.OFFSET_ON_GROUND] = agent.onGround ? 1.0f : 0.0f;
+        // 5. Boolean flags (4 values)
+        observationData[Observation.OFFSET_SPRINTING] = agent.actionPack.sprinting ? 1.0f : 0.0f;
+        observationData[Observation.OFFSET_SNEAKING] = agent.actionPack.sneaking ? 1.0f : 0.0f;
+        observationData[Observation.OFFSET_ON_GROUND] = agent.onGround ? 1.0f : 0.0f;
 
         // 6. Goal direction (3 values) // TODO: Make this relative to the agent's look direction
         Vec3 goalDirectionVec = goalPosition.subtract(position).normalize();
@@ -268,14 +267,23 @@ public class MinecraftEnvironment {
         this.currentStep++;
         agent.actionPack.stopAll();
 
-        /// boolean sneaking = action.sneaking() == 1;
-        /// agent.actionPack.setSneaking(sneaking);
-        /// if (!sneaking) {
-        ///     agent.actionPack.setSprinting(action.sprinting() == 1);
-        /// }
-        /// if (action.jumping() == 1) {
-        ///     agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
-        /// }
+        int sprintingSneaking = action.sprintingSneaking();
+        if (sprintingSneaking == 1) {
+            // Sprinting
+            agent.actionPack.setSprinting(true);
+            agent.actionPack.setSneaking(false);
+        } else if (sprintingSneaking == 2) {
+            // Sneaking
+            agent.actionPack.setSprinting(false);
+            agent.actionPack.setSneaking(true);
+        } else {
+            agent.actionPack.setSprinting(false);
+            agent.actionPack.setSneaking(false);
+        }
+
+        if (action.jumping() == 1) {
+            agent.actionPack.start(EntityPlayerActionPack.ActionType.JUMP, EntityPlayerActionPack.Action.once());
+        }
 
         Vec2 rotation = action.lookChange().scale(15.0f); // Scale to a reasonable rotation speed
         agent.actionPack.turn(rotation); // Yaw, Pitch

@@ -10,10 +10,9 @@ public class Observation {
     // public static final int SIZE_VELOCITY = 3;
     // public static final int SIZE_YAW = 2;
     // public static final int SIZE_PITCH = 2;
-    // public static final int SIZE_JUMPING = 1;
-    // public static final int SIZE_SPRINTING = 1;
-    // public static final int SIZE_SNEAKING = 1;
-    // public static final int SIZE_ON_GROUND = 1;
+    public static final int SIZE_SPRINTING = 1;
+    public static final int SIZE_SNEAKING = 1;
+    public static final int SIZE_ON_GROUND = 1;
     public static final int SIZE_GOAL_DIRECTION = 3;
     public static final int SIZE_GOAL_DISTANCE = 1;
 
@@ -22,12 +21,11 @@ public class Observation {
     // public static final int OFFSET_VELOCITY = OFFSET_POSITION_IN_BLOCK + SIZE_POSITION_IN_BLOCK;
     // public static final int OFFSET_YAW = OFFSET_VELOCITY + SIZE_VELOCITY;
     // public static final int OFFSET_PITCH = OFFSET_YAW + SIZE_YAW;
-    // public static final int OFFSET_JUMPING = OFFSET_PITCH + SIZE_PITCH;
-    // public static final int OFFSET_SPRINTING = OFFSET_JUMPING + SIZE_JUMPING;
-    // public static final int OFFSET_SNEAKING = OFFSET_SPRINTING + SIZE_SPRINTING;
-    // public static final int OFFSET_ON_GROUND = OFFSET_SNEAKING + SIZE_SNEAKING;
-    // public static final int OFFSET_GOAL_DIRECTION = OFFSET_ON_GROUND + SIZE_ON_GROUND;
-    public static final int OFFSET_GOAL_DIRECTION = 0;
+    // public static final int OFFSET_SPRINTING = OFFSET_PITCH + SIZE_PITCH;
+    public static final int OFFSET_SPRINTING = 0;
+    public static final int OFFSET_SNEAKING = OFFSET_SPRINTING + SIZE_SPRINTING;
+    public static final int OFFSET_ON_GROUND = OFFSET_SNEAKING + SIZE_SNEAKING;
+    public static final int OFFSET_GOAL_DIRECTION = OFFSET_ON_GROUND + SIZE_ON_GROUND;
     public static final int OFFSET_GOAL_DISTANCE = OFFSET_GOAL_DIRECTION + SIZE_GOAL_DIRECTION;
 
     public static final int OBSERVATION_SPACE_SIZE = OFFSET_GOAL_DISTANCE + SIZE_GOAL_DISTANCE;
@@ -85,37 +83,29 @@ public class Observation {
     ///     return data.narrow(0, OFFSET_PITCH, SIZE_PITCH);
     /// }
 
-    /// /**
-    ///  * Jumping:
-    ///  * - Shape: (1,)
-    ///  */
-    /// public Tensor jumping() {
-    ///     return data.narrow(0, OFFSET_JUMPING, SIZE_JUMPING);
-    /// }
+    /**
+     * Sprinting:
+     * - Shape: (1,)
+     */
+    public Tensor sprinting() {
+        return data.narrow(0, OFFSET_SPRINTING, SIZE_SPRINTING);
+    }
 
-    /// /**
-    ///  * Sprinting:
-    ///  * - Shape: (1,)
-    ///  */
-    /// public Tensor sprinting() {
-    ///     return data.narrow(0, OFFSET_SPRINTING, SIZE_SPRINTING);
-    /// }
+    /**
+     * Sneaking:
+     * - Shape: (1,)
+     */
+    public Tensor sneaking() {
+        return data.narrow(0, OFFSET_SNEAKING, SIZE_SNEAKING);
+    }
 
-    /// /**
-    ///  * Sneaking:
-    ///  * - Shape: (1,)
-    ///  */
-    /// public Tensor sneaking() {
-    ///     return data.narrow(0, OFFSET_SNEAKING, SIZE_SNEAKING);
-    /// }
-
-    /// /**
-    ///  * On Ground:
-    ///  * - Shape: (1,)
-    ///  */
-    /// public Tensor onGround() {
-    ///     return data.narrow(0, OFFSET_ON_GROUND, SIZE_ON_GROUND);
-    /// }
+    /**
+     * On Ground:
+     * - Shape: (1,)
+     */
+    public Tensor onGround() {
+        return data.narrow(0, OFFSET_ON_GROUND, SIZE_ON_GROUND);
+    }
 
     /**
      * Goal Direction:
