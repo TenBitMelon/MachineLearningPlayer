@@ -766,7 +766,7 @@ public class TrainingManager {
 
         iteration++;
 
-        if (iteration % 200 == 0) {
+        if (iteration % 100 == 0) {
             // allocator.snapshot();
             model.saveCheckpoint(iteration);
         }

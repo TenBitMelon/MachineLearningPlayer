@@ -50,7 +50,7 @@ public class MinecraftEnvironment {
         World world = Bukkit.getWorlds().getFirst();
 
         int[] coords = szudzikUnpairing(nextEnvironmentId);
-        roomLocation = new Location(world, coords[0] * 16, 0, coords[1] * 16);
+        roomLocation = new Location(world, coords[0] * 16 + 16, 0, coords[1] * 16 + 16);
 
         environmentLog = new TextWindow(Display.Billboard.VERTICAL, TextDisplay.TextAlignment.LEFT);
         environmentLog.setPosition(roomLocation.toVector().toVector3d().mul(1, 0, 1).add(5.0f, 4.0f, 5.0f));
@@ -246,7 +246,7 @@ public class MinecraftEnvironment {
             roomLocation.getWorld().getBlockAt((int) goalPosition.x, roomLocation.getBlockY(), (int) goalPosition.z).setType(randomConcrete);
         }
 
-        double[] randomPoint = getRandomPointInCircle(GRID_SIZE_XZ / 2f, GRID_SIZE_XZ);
+        double[] randomPoint = getRandomPointInCircle(8, 16);
         this.goalPosition = new Vec3(
             roomLocation.getX() + 8.5 + randomPoint[0],
             roomLocation.getY() + 1.0,
