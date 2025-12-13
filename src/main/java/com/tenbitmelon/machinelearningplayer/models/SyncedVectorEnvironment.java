@@ -1,6 +1,9 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
-import com.tenbitmelon.machinelearningplayer.environment.*;
+import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
+import com.tenbitmelon.machinelearningplayer.environment.Observation;
+import com.tenbitmelon.machinelearningplayer.environment.ResetResult;
+import com.tenbitmelon.machinelearningplayer.environment.StepResult;
 import org.bytedeco.pytorch.Tensor;
 
 import java.util.Arrays;
@@ -16,10 +19,19 @@ public class SyncedVectorEnvironment {
 
     public SyncedVectorEnvironment(ExperimentConfig args) {
         this.numEnvs = args.numEnvs;
+
+        if (this.numEnvs % 2 != 0) {
+            throw new IllegalArgumentException("numEnvs must be even for SyncedVectorEnvironment");
+        }
+
+
         this.environments = new MinecraftEnvironment[numEnvs];
         for (int i = 0; i < numEnvs; i++) {
             environments[i] = new MinecraftEnvironment(args);
-
+            if (i % 2 == 1) {
+                environments[i].setOppositeOf(environments[i - 1]);
+                environments[i - 1].setOppositeOf(environments[i]);
+            }
         }
 
         this.terminated = new boolean[numEnvs];
@@ -34,16 +46,14 @@ public class SyncedVectorEnvironment {
 
     public VectorResetResult reset() {
         Observation[] observations = new Observation[numEnvs];
-        Info[] infos = new Info[numEnvs];
 
         for (int i = 0; i < numEnvs; i++) {
             ResetResult resetResult = environments[i].reset();
             observations[i] = resetResult.observation();
-            infos[i] = resetResult.info();
             terminated[i] = false;
             truncated[i] = false;
         }
-        return new VectorResetResult(observations, infos);
+        return new VectorResetResult(observations);
     }
 
     public void preTickStep(Tensor action) {
@@ -58,7 +68,6 @@ public class SyncedVectorEnvironment {
         // LOGGER.debug("Post tick stepping in SyncedVectorEnvironment");
         Observation[] observations = new Observation[numEnvs];
         double[] rewards = new double[numEnvs];
-        Info[] infos = new Info[numEnvs];
 
         for (int i = 0; i < numEnvs; i++) {
 
@@ -66,7 +75,6 @@ public class SyncedVectorEnvironment {
             rewards[i] = stepResult.reward();
             terminated[i] = stepResult.terminated();
             truncated[i] = stepResult.truncated();
-            infos[i] = stepResult.info();
 
             if (terminated[i] || truncated[i]) {
                 ResetResult resetResult = environments[i].reset();
@@ -75,7 +83,7 @@ public class SyncedVectorEnvironment {
                 observations[i] = stepResult.observation();
             }
         }
-        return new VectorStepResult(observations, rewards, terminated, truncated, infos);
+        return new VectorStepResult(observations, rewards, terminated, truncated);
     }
 
     public boolean isReady() {

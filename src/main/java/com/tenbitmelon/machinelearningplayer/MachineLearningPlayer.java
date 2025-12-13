@@ -13,7 +13,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -21,13 +20,7 @@ import org.bytedeco.javacpp.Loader;
 import org.bytedeco.openblas.global.openblas;
 import org.bytedeco.pytorch.Device;
 import org.bytedeco.pytorch.global.torch;
-import org.bytedeco.pytorch.presets.torch_cuda;
 import org.slf4j.event.Level;
-
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Method;
-import java.net.URL;
 
 @SuppressWarnings("UnstableApiUsage")
 public final class MachineLearningPlayer extends JavaPlugin implements Listener {

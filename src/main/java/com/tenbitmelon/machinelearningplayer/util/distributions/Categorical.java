@@ -1,6 +1,9 @@
 package com.tenbitmelon.machinelearningplayer.util.distributions;
 
-import org.bytedeco.pytorch.*;
+import org.bytedeco.pytorch.LongArrayRef;
+import org.bytedeco.pytorch.LongOptional;
+import org.bytedeco.pytorch.Tensor;
+import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
 public class Categorical {

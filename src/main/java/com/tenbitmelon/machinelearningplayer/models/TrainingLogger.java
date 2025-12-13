@@ -1,10 +1,13 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
-import java.io.*;
-import java.nio.file.*;
-import java.time.*;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.UUID;
 
 public class TrainingLogger {
     private final BufferedWriter writer;

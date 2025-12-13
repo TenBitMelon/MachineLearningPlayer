@@ -1,15 +1,9 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
-import org.bytedeco.javacpp.Pointer;
-import org.bytedeco.pytorch.cuda.DeviceStats;
-import org.bytedeco.pytorch.global.torch_cuda;
 import org.slf4j.event.Level;
 
 import java.util.Arrays;
 import java.util.HashMap;
-
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-import static com.tenbitmelon.machinelearningplayer.models.TrainingManager.device;
 
 public class Logger {
 

@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
+import com.sun.management.OperatingSystemMXBean;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.pytorch.cuda.DeviceStats;
 import org.bytedeco.pytorch.global.torch_cuda;
@@ -7,8 +8,6 @@ import org.bytedeco.pytorch.global.torch_cuda;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.management.ManagementFactory;
-
-import com.sun.management.OperatingSystemMXBean; // Note: Requires jdk.management module
 
 public class SystemStats {
 

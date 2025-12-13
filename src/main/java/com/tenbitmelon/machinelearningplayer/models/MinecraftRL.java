@@ -1,20 +1,13 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
-import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import com.tenbitmelon.machinelearningplayer.util.distributions.Categorical;
 import com.tenbitmelon.machinelearningplayer.util.distributions.Normal;
-import org.bytedeco.javacpp.FloatPointer;
-import org.bytedeco.javacpp.LongPointer;
-import org.bytedeco.openblas.global.openblas;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.Module;
 import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
-
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class MinecraftRL extends Module {
 
@@ -29,6 +22,7 @@ public class MinecraftRL extends Module {
     final LinearImpl actorJumpKey;
     final LinearImpl actorSprintSneakKeys;
     final LinearImpl critic;
+    final LinearImpl actorAttackUseItem;
 
     public MinecraftRL(SyncedVectorEnvironment environment) {
         /*
@@ -125,6 +119,11 @@ public class MinecraftRL extends Module {
         LinearImpl actorSprintSneakKeys = createLinearLayer(64, 3, 0.01); // 3 outputs: no sprint/sneak, sprint, sneak
         register_module("actor_sprint_sneak_keys", actorSprintSneakKeys);
         this.actorSprintSneakKeys = actorSprintSneakKeys;
+
+        // Attack & Use
+        LinearImpl actorAttackUseItem = createLinearLayer(64, 3, 0.01); // 3 outputs: no attack/use, attack, use
+        register_module("actor_attack_use_item", actorAttackUseItem);
+        this.actorAttackUseItem = actorAttackUseItem;
 
         /*
         self.critic = layer_init(nn.Linear(64, 1), std=1)
@@ -376,6 +375,11 @@ public class MinecraftRL extends Module {
         Tensor sprintSneakKeysLogits = this.actorSprintSneakKeys.forward(hidden);
         Categorical sprintSneakKeysProbs = new Categorical(sprintSneakKeysLogits);
 
+        // Attack & Use Item
+
+        Tensor attackUseItemLogits = this.actorAttackUseItem.forward(hidden);
+        Categorical attackUseItemProbs = new Categorical(attackUseItemLogits);
+
         /*
         if action is None:
             x_action = x_probs.sample()
@@ -396,6 +400,7 @@ public class MinecraftRL extends Module {
         Tensor pitchAction;
         Tensor jumpKeyAction;
         Tensor sprintSneakKeysAction;
+        Tensor attackUseItemAction;
 
         if (action == null) {
             forwardMoveKeysAction = forwardMoveKeysProbs.sample(); // LongTensor
@@ -404,6 +409,7 @@ public class MinecraftRL extends Module {
             pitchAction = pitchDist.sample(); // FloatTensor
             jumpKeyAction = jumpKeyProbs.sample(); // LongTensor
             sprintSneakKeysAction = sprintSneakKeysProbs.sample(); // LongTensor
+            attackUseItemAction = attackUseItemProbs.sample(); // LongTensor
 
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
             action = torch.stack(new TensorVector(
@@ -412,7 +418,8 @@ public class MinecraftRL extends Module {
                 yawAction,
                 pitchAction,
                 forwardMoveKeysAction.to(torch.ScalarType.Float),
-                strafingMoveKeysAction.to(torch.ScalarType.Float)
+                strafingMoveKeysAction.to(torch.ScalarType.Float),
+                attackUseItemAction.to(torch.ScalarType.Float)
             ), 1);
         } else {
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
@@ -422,6 +429,7 @@ public class MinecraftRL extends Module {
             pitchAction = action.narrow(1, 3, 1).squeeze(1).to(pitchMean.dtype());
             forwardMoveKeysAction = action.narrow(1, 4, 1).squeeze(1).to(torch.ScalarType.Long);
             strafingMoveKeysAction = action.narrow(1, 5, 1).squeeze(1).to(torch.ScalarType.Long);
+            attackUseItemAction = action.narrow(1, 6, 1).squeeze(1).to(torch.ScalarType.Long);
         }
 
         /*
@@ -438,13 +446,15 @@ public class MinecraftRL extends Module {
         Tensor pitchLogProbs = pitchDist.logProb(pitchAction);
         Tensor jumpKeyLogProbs = jumpKeyProbs.logProb(jumpKeyAction);
         Tensor sprintSneakKeysLogProbs = sprintSneakKeysProbs.logProb(sprintSneakKeysAction);
+        Tensor attackUseItemLogProbs = attackUseItemProbs.logProb(attackUseItemAction);
 
         Tensor totalLogProbs = forwardMoveKeysLogProbs
             .add(strafingMoveKeysLogProbs)
             .add(yawLogProbs)
             .add(pitchLogProbs)
             .add(jumpKeyLogProbs)
-            .add(sprintSneakKeysLogProbs);
+            .add(sprintSneakKeysLogProbs)
+            .add(attackUseItemLogProbs);
 
         /*
         entropy = x_probs.entropy() + y_probs.entropy() + rot_dist.entropy()
@@ -456,13 +466,15 @@ public class MinecraftRL extends Module {
         Tensor pitchEntropy = pitchDist.entropy();
         Tensor jumpKeyEntropy = jumpKeyProbs.entropy();
         Tensor sprintSneakKeysEntropy = sprintSneakKeysProbs.entropy();
+        Tensor attackUseItemEntropy = attackUseItemProbs.entropy();
 
         Tensor totalEntropy = forwardMoveKeysEntropy
             .add(strafingMoveKeysEntropy)
             .add(yawEntropy)
             .add(pitchEntropy)
             .add(jumpKeyEntropy)
-            .add(sprintSneakKeysEntropy);
+            .add(sprintSneakKeysEntropy)
+            .add(attackUseItemEntropy);
 
         /*
         return (
