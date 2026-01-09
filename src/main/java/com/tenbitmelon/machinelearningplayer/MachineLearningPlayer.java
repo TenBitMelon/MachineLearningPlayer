@@ -3,10 +3,12 @@ package com.tenbitmelon.machinelearningplayer;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.Logger;
 import com.tenbitmelon.machinelearningplayer.events.EntityInteractEvent;
+import com.tenbitmelon.machinelearningplayer.events.PlayerVEvent;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
+import net.minecraft.server.ServerTickRateManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -110,6 +112,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(this, this);
         pluginManager.registerEvents(new EntityInteractEvent(), this);
+        pluginManager.registerEvents(new PlayerVEvent(), this);
         pluginManager.registerEvents(Debugger.DebugListener.INSTANCE, this);
 
         this.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
@@ -213,6 +216,20 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
     public void onDisable() {
         Debugger.stop();
         TrainingManager.shutdown();
+
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                if (entity instanceof Player player) {
+                    if (player.getGameMode() == GameMode.CREATIVE) {
+                        player.teleport(new Location(world, 16, 5, 20, 180, 0));
+                    } else {
+                        player.kick();
+                    }
+                } else {
+                    entity.remove();
+                }
+            }
+        }
     }
 
     @EventHandler

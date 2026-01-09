@@ -2,9 +2,12 @@ package com.tenbitmelon.machinelearningplayer.environment;
 
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
+import com.tenbitmelon.machinelearningplayer.debugger.Logger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
+import com.tenbitmelon.machinelearningplayer.util.BlockDisplayBuilder;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Brightness;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.*;
@@ -16,11 +19,12 @@ import org.joml.Vector3d;
 
 import java.util.concurrent.CompletableFuture;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 import static com.tenbitmelon.machinelearningplayer.util.Utils.szudzikUnpairing;
 
 public class MinecraftEnvironment {
 
-    public static final int CIRCLE_RADIUS = 5;
+    public static final int CIRCLE_RADIUS = 2;
     private static int nextEnvironmentId = 0;
 
     private final ExperimentConfig args;
@@ -53,8 +57,8 @@ public class MinecraftEnvironment {
         int startX = chunk.getX() * 16;
         int startZ = chunk.getZ() * 16;
 
-        double centerX = startX + 8.0;
-        double centerZ = startZ + 8.0;
+        double centerX = startX + 8.5;
+        double centerZ = startZ + 8.5;
         this.centerPosition = new Vec3(centerX, 1.0, centerZ);
 
         for (int x = 0; x < 16; x++) {
@@ -99,6 +103,15 @@ public class MinecraftEnvironment {
             }
         }
 
+        if (this.environmentId == 0) {
+            for (int angle = 0; angle < 360; angle += (360 / 12)) {
+                double rad = Math.toRadians(angle);
+                double x = centerX + CIRCLE_RADIUS * Math.cos(rad);
+                double z = centerZ + CIRCLE_RADIUS * Math.sin(rad);
+                new BlockDisplayBuilder(world).block(Material.CRIMSON_NYLIUM.createBlockData()).teleport(x, 1.0 - 0.1 + 0.001, z).setScale(0.1f).brightness(new Display.Brightness(15, 15)).build();
+            }
+        }
+
         roomLocation.getWorld().getBlockAt(roomLocation.getBlockX() + 8, 0, roomLocation.getBlockZ() + 8).setType(Material.GOLD_BLOCK);
 
         Location agentLocation;
@@ -136,6 +149,7 @@ public class MinecraftEnvironment {
     }
 
     public Observation getObservation() {
+        // LOGGER.info("Getting observation for environment " + this.environmentId + " at step " + this.currentStep + ", agent: " + this.agent.getName());
         float pitchScaled = (agent.getXRot() / 90.0f); // Normalize pitch to [-1, 1] where 1 is looking straight up and -1 is looking straight down
 
         // Distance to center
@@ -144,12 +158,12 @@ public class MinecraftEnvironment {
         // getYRot is in Degrees
         // yRot expects Radians
         float yawRadians = (float) Math.toRadians(agent.getYRot());
-        // yRot rotates clockwise around the Y axis, which is the opposite of what I expected
+        // yRot rotates clockwise around the Y axis, which is the opposite of what I expected,
         // so we don't need to negate the angle because its already doing that
-        Vec3 opponentDirectionVec = oppositeEnvironment.agent.position().subtract(agent.position());
-        float opponentDistance = (float) opponentDirectionVec.length();
-        opponentDirectionVec = opponentDirectionVec.normalize();
-        opponentDirectionVec = opponentDirectionVec.yRot(yawRadians);
+        Vec3 opponentDirectionWorldSpace = oppositeEnvironment.agent.position().subtract(agent.position());
+        float opponentDistance = (float) opponentDirectionWorldSpace.length();
+        opponentDirectionWorldSpace = opponentDirectionWorldSpace.normalize();
+        Vec3 opponentDirectionLocalSpace = opponentDirectionWorldSpace.yRot(yawRadians);
 
 
         Observation observation = new Observation(
@@ -158,7 +172,7 @@ public class MinecraftEnvironment {
             agent.actionPack.sneaking,
             agent.onGround,
             centerDistance,
-            opponentDirectionVec,
+            opponentDirectionLocalSpace,
             opponentDistance
         );
 
@@ -255,7 +269,7 @@ public class MinecraftEnvironment {
             // I WON (I am in, other fell out)
             reward = 100.0f;
             terminated = true;
-        } else {
+        } else if (!iAmIn && !oppIsIn) {
             // DRAW / DOUBLE KO (Both fell out same tick)
             reward = -50.0f; // Penalty for falling, but not as bad as losing outright
             terminated = true;

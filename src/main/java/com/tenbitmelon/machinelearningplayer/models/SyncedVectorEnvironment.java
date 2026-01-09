@@ -69,18 +69,29 @@ public class SyncedVectorEnvironment {
         Observation[] observations = new Observation[numEnvs];
         double[] rewards = new double[numEnvs];
 
-        for (int i = 0; i < numEnvs; i++) {
+        for (int i = 0; i < numEnvs; i += 2) {
 
             StepResult stepResult = environments[i].postTickStep();
             rewards[i] = stepResult.reward();
             terminated[i] = stepResult.terminated();
             truncated[i] = stepResult.truncated();
 
+            StepResult oppositeStepResult = environments[i + 1].postTickStep();
+            rewards[i + 1] = oppositeStepResult.reward();
+            terminated[i + 1] = oppositeStepResult.terminated();
+            truncated[i + 1] = oppositeStepResult.truncated();
+
+            assert terminated[i] == terminated[i + 1] : "Terminated flags do not match for opposite environments";
+            assert truncated[i] == truncated[i + 1] : "Truncated flags do not match for opposite environments";
+
             if (terminated[i] || truncated[i]) {
                 ResetResult resetResult = environments[i].reset();
                 observations[i] = resetResult.observation();
+                ResetResult oppositeResetResult = environments[i + 1].reset();
+                observations[i + 1] = oppositeResetResult.observation();
             } else {
                 observations[i] = stepResult.observation();
+                observations[i + 1] = oppositeStepResult.observation();
             }
         }
         return new VectorStepResult(observations, rewards, terminated, truncated);

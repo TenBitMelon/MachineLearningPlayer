@@ -113,6 +113,10 @@ public class BlockDisplayBuilder {
         return this;
     }
 
+    public BlockDisplayBuilder setScale(float scale) {
+        return setScale(scale, scale, scale);
+    }
+
     public BlockDisplayBuilder setRotation(Quaternionf leftRotation, Quaternionf rightRotation) {
         Transformation current = blockDisplay.getTransformation();
         Transformation updated = new Transformation(
@@ -128,6 +132,16 @@ public class BlockDisplayBuilder {
     // Teleportation
     public BlockDisplayBuilder teleport(Location location) {
         blockDisplay.teleport(location);
+        return this;
+    }
+
+    public BlockDisplayBuilder teleport(double x, double y, double z) {
+        blockDisplay.teleport(new Location(
+            blockDisplay.getWorld(),
+            x,
+            y,
+            z
+        ));
         return this;
     }
 

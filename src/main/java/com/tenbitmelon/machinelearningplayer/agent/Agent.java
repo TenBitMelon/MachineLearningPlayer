@@ -1,6 +1,7 @@
 package com.tenbitmelon.machinelearningplayer.agent;
 
 import com.mojang.authlib.GameProfile;
+import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.Control;
@@ -8,6 +9,7 @@ import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.TextControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import com.tenbitmelon.machinelearningplayer.environment.Info;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
+import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import net.kyori.adventure.text.Component;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
@@ -68,6 +70,8 @@ public class Agent extends ServerPlayer {
         debugWindow.addControl(new TextControl(""));
         debugWindow.addControl(new TextControl("Info Display:"));
         debugWindow.addControl(infoDisplayControl);
+
+        this.persist = false;
     }
 
     public static CompletableFuture<Agent> spawn(MinecraftServer server, Location location) {
@@ -104,7 +108,7 @@ public class Agent extends ServerPlayer {
 
         Agent instance = new Agent(server, worldIn, current, ClientInformation.createDefault());
         instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
-        server.getPlayerList().placeNewPlayer(new FakeClientConnection(PacketFlow.SERVERBOUND), instance, new CommonListenerCookie(current, 0, instance.clientInformation(), false));
+        server.getPlayerList().placeNewPlayer(new FakeClientConnection(PacketFlow.SERVERBOUND, instance), instance, new CommonListenerCookie(current, 0, instance.clientInformation(), false));
         instance.snapTo(location.getX(), location.getY(), location.getZ(), 0.0f, 0.0f);
         instance.teleportTo(worldIn, location.getX(), location.getY(), location.getZ(), Set.of(), 0.0f, 0.0f, true);
         instance.setHealth(20.0F);
@@ -172,6 +176,8 @@ public class Agent extends ServerPlayer {
 
     @Override
     public void tick() {
+        if (!TrainingManager.runTraining) return;
+
         // LOGGER.info("Agent {} tick", this.getName().getString()); // AGENTS GET TICKED BEFORE the loop tick
         actionPack.onUpdate();
         if (this.getServer().getTickCount() % 10 == 0) {
