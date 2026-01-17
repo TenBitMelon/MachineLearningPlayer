@@ -17,6 +17,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 
 public class ControlsWindow extends UIElement {
 
@@ -57,6 +58,7 @@ public class ControlsWindow extends UIElement {
     }
 
     public void removeControl(Control control) {
+        control.remove();
         controls.remove(control);
         dirty = true;
     }
@@ -106,7 +108,9 @@ public class ControlsWindow extends UIElement {
         if (super.onInteract(event)) return true;
 
         boolean handled = false;
-        for (Control control : controls) {
+        Iterator<Control> iterator = controls.iterator();
+        while (iterator.hasNext()) {
+            Control control = iterator.next();
             handled |= control.onInteract(event);
         }
         if (handled) {
@@ -117,25 +121,12 @@ public class ControlsWindow extends UIElement {
 
     @Override
     public void setPosition(Vector3d position, double direction) {
-
-        boolean matchPos = (int) position.x == (int) this.position.x &&
-            (int) position.y == (int) this.position.y &&
-            (int) position.z == (int) this.position.z &&
-            this.direction == direction;
-
         super.setPosition(position, direction);
-
-        // Check if both positions are the same whole number to avoid unnecessary teleportation
-        if (matchPos) {
-            return; // No need to update position or rotation
-        }
-
 
         display.teleport(new Location(Debugger.WORLD, position.x, position.y, position.z));
         display.setRotation((float) direction - 180, 0);
         displayBack.teleport(new Location(Debugger.WORLD, position.x, position.y, position.z));
         displayBack.setRotation((float) direction - 180, 0);
-
 
         dirty = true;
     }

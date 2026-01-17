@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
+import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.SystemStats;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
@@ -17,6 +18,7 @@ import org.bytedeco.pytorch.cuda.DeviceStats;
 import org.bytedeco.pytorch.global.torch;
 import org.bytedeco.pytorch.global.torch_cuda;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 public class TrainingManager {
@@ -94,7 +96,7 @@ public class TrainingManager {
 
         environment = new SyncedVectorEnvironment(args);
 
-        model = new MinecraftRL(environment);
+        model = new MinecraftRL(device);
         model.loadCheckpoint(args.startingCheckpoint);
         model.to(device, false);
         modelParameters = model.parameters();
@@ -171,6 +173,7 @@ public class TrainingManager {
 
     // Placeholder for future implementation
     public static void trainingStep() {
+        if (CURRENT_MODE != MachineLearningPlayer.Mode.TRAINING) return;
         if (!runTraining) return;
 
 

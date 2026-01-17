@@ -6,15 +6,11 @@ public class ExperimentConfig {
     /**
      * The learning rate of the optimizer.
      */
-    public final float learningRate = 2.5e-4f;
-    /**
-     * The number of parallel game environments.
-     */
-    public final int numEnvs = 32;
+    public final float learningRate = 2e-4f;
     /**
      * Toggle learning rate annealing for policy and value networks.
      */
-    public final boolean annealLr = true;
+    public final boolean annealLr = false;
     /**
      * The discount factor gamma.
      */
@@ -60,6 +56,10 @@ public class ExperimentConfig {
      */
     public final Float targetKl = 0.02f;
     /**
+     * The number of parallel game environments.
+     */
+    public int numEnvs = 32;
+    /**
      * The number of steps to run in each environment per policy rollout.
      */
     public int numSteps = 200;
@@ -71,11 +71,11 @@ public class ExperimentConfig {
     /**
      * The number of iterations to run. One iteration is numEnvs * numSteps steps.
      */
-    public int numIterations = 5000;
+    public int numIterations = 10000;
     /**
      * The checkpoint to start from.
      */
-    public Integer startingCheckpoint = null;
+    public Integer startingCheckpoint = 3300;
 
     private ExperimentConfig() {}
 

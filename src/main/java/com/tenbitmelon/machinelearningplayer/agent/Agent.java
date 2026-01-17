@@ -9,6 +9,7 @@ import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.TextControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
 import com.tenbitmelon.machinelearningplayer.environment.Info;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
+import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import net.kyori.adventure.text.Component;
 import net.minecraft.core.BlockPos;
@@ -176,7 +177,7 @@ public class Agent extends ServerPlayer {
 
     @Override
     public void tick() {
-        if (!TrainingManager.runTraining) return;
+        if (!(TrainingManager.runTraining || EvaluationManager.runEvaluation)) return;
 
         // LOGGER.info("Agent {} tick", this.getName().getString()); // AGENTS GET TICKED BEFORE the loop tick
         actionPack.onUpdate();

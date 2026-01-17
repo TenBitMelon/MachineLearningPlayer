@@ -29,8 +29,8 @@ public class SyncedVectorEnvironment {
         for (int i = 0; i < numEnvs; i++) {
             environments[i] = new MinecraftEnvironment(args);
             if (i % 2 == 1) {
-                environments[i].setOppositeOf(environments[i - 1]);
-                environments[i - 1].setOppositeOf(environments[i]);
+                environments[i].setTarget(environments[i - 1].agent);
+                environments[i - 1].setTarget(environments[i].agent);
             }
         }
 
@@ -100,5 +100,9 @@ public class SyncedVectorEnvironment {
     public boolean isReady() {
         return Arrays.stream(environments)
             .allMatch(MinecraftEnvironment::isReady);
+    }
+
+    public MinecraftEnvironment getEnvironment(int index) {
+        return environments[index];
     }
 }

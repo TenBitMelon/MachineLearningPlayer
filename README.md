@@ -124,6 +124,7 @@ For historical context, here are the key releases:
 | Release                                                                                | Description                                                                |
 |:---------------------------------------------------------------------------------------|:---------------------------------------------------------------------------|
 | [**v0.1.0**](https://github.com/TenBitMelon/MachineLearningPlayer/releases/tag/v0.1.0) | First working version. The agent can walk to goal block and turn its head. |
+| [**v0.2.0**](https://github.com/TenBitMelon/MachineLearningPlayer/releases/tag/v0.2.0) | Sumo battles. Only trained for a small bit                                 |
 
 # Credits
 

@@ -7,25 +7,38 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
+import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import io.papermc.paper.adventure.providers.ClickCallbackProviderImpl;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.resolvers.selector.EntitySelectorArgumentResolver;
+import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import org.bukkit.*;
 import org.bukkit.command.CommandSender;
+import org.bukkit.craftbukkit.entity.CraftEntity;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.slf4j.event.Level;
 
 import java.lang.reflect.Field;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 @SuppressWarnings("UnstableApiUsage")
 public class MachineLearningCommand {
 
-    public static LiteralCommandNode<CommandSourceStack> register() {
+    public static LiteralCommandNode<CommandSourceStack> register(MachineLearningPlayer plugin) {
         LiteralArgumentBuilder<CommandSourceStack> commandBuilder = Commands.literal("ml")
             .executes(ctx -> {
                 ctx.getSource().getSender().sendPlainMessage("[STATS]");
@@ -36,9 +49,20 @@ public class MachineLearningCommand {
                 ctx.getSource().getSender().sendPlainMessage("Sprint mode " + (TrainingManager.sprint ? "enabled" : "disabled"));
                 return Command.SINGLE_SUCCESS;
             }))
-            .then(Commands.literal("runTraining").executes(ctx -> {
-                TrainingManager.runTraining = !TrainingManager.runTraining;
-                ctx.getSource().getSender().sendPlainMessage("Run training " + (TrainingManager.runTraining ? "enabled" : "disabled"));
+            .then(Commands.literal("run").executes(ctx -> {
+                switch (CURRENT_MODE) {
+                    case TRAINING -> {
+                        TrainingManager.runTraining = !TrainingManager.runTraining;
+                        ctx.getSource().getSender().sendPlainMessage("Run training " + (TrainingManager.runTraining ? "enabled" : "disabled"));
+                        return Command.SINGLE_SUCCESS;
+                    }
+                    case EVALUATION -> {
+                        EvaluationManager.runEvaluation = !EvaluationManager.runEvaluation;
+                        ctx.getSource().getSender().sendPlainMessage("Run evaluation " + (EvaluationManager.runEvaluation ? "enabled" : "disabled"));
+                        return Command.SINGLE_SUCCESS;
+                    }
+                }
+                ctx.getSource().getSender().sendPlainMessage("No mode selected.");
                 return Command.SINGLE_SUCCESS;
             }))
             .then(Commands.literal("checkpoint").executes(ctx -> {
@@ -82,6 +106,37 @@ public class MachineLearningCommand {
                 TrainingManager.runTraining = true;
                 return Command.SINGLE_SUCCESS;
             }))
+            .then(Commands.literal("mode").executes(ctx -> {
+                        if (CURRENT_MODE != null) {
+                            ctx.getSource().getSender().sendPlainMessage("Mode is already set to " + CURRENT_MODE + ". Restart the server to change modes.");
+                        }
+                        return Command.SINGLE_SUCCESS;
+                    })
+                    .then(Commands.literal("eval")
+                        .executes(ctx -> {
+                            EvaluationManager.setup();
+                            CURRENT_MODE = MachineLearningPlayer.Mode.EVALUATION;
+                            return Command.SINGLE_SUCCESS;
+                        }))
+                    .then(Commands.literal("train")
+                        .executes(ctx -> {
+                            TrainingManager.setup();
+                            CURRENT_MODE = MachineLearningPlayer.Mode.TRAINING;
+                            return Command.SINGLE_SUCCESS;
+                        }))
+            )
+            .then(Commands.literal("setTarget").then(Commands.argument("target", ArgumentTypes.entity()).executes(ctx -> {
+                if (CURRENT_MODE == MachineLearningPlayer.Mode.EVALUATION) {
+                    final EntitySelectorArgumentResolver entitySelectorArgumentResolver = ctx.getArgument("target", EntitySelectorArgumentResolver.class);
+                    Entity entity = entitySelectorArgumentResolver.resolve(ctx.getSource()).getFirst();
+
+                    net.minecraft.world.entity.Entity handle = ((CraftEntity) entity).getHandle();
+                    EvaluationManager.getEnvironment().setTarget(handle);
+                    ctx.getSource().getSender().sendPlainMessage("Set evaluation target to " + handle.getName());
+
+                }
+                return Command.SINGLE_SUCCESS;
+            })))
             .then(logLevels())
             .then(args());
 

@@ -1,33 +1,44 @@
 package com.tenbitmelon.machinelearningplayer;
 
+import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.Logger;
-import com.tenbitmelon.machinelearningplayer.events.EntityInteractEvent;
-import com.tenbitmelon.machinelearningplayer.events.PlayerVEvent;
+import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.event.player.PlayerFailMoveEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
-import net.minecraft.server.ServerTickRateManager;
+import net.minecraft.server.level.ServerPlayer;
 import org.bukkit.*;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerVelocityEvent;
+import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bytedeco.cuda.presets.cudnn;
+import org.bytedeco.cuda.presets.cupti;
 import org.bytedeco.javacpp.Loader;
-import org.bytedeco.openblas.global.openblas;
+import org.bytedeco.javacpp.presets.javacpp;
+import org.bytedeco.openblas.presets.openblas;
 import org.bytedeco.pytorch.Device;
-import org.bytedeco.pytorch.global.torch;
+import org.bytedeco.pytorch.presets.torch;
+import org.bytedeco.pytorch.presets.torch_cuda;
 import org.slf4j.event.Level;
 
 @SuppressWarnings("UnstableApiUsage")
 public final class MachineLearningPlayer extends JavaPlugin implements Listener {
 
+    public static Mode CURRENT_MODE = null;
     public static Logger LOGGER = null;
+
+    public static MachineLearningPlayer PLUGIN = null;
 
     static {
         System.setProperty("org.bytedeco.javacpp.pathsFirst", "true");
@@ -39,71 +50,32 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         // System.setProperty("org.bytedeco.javacpp.logger.level", "debug");
         // System.setProperty("org.bytedeco.openblas.load", "mkl");
         //
-        Loader.load(org.bytedeco.javacpp.presets.javacpp.class);
-        Loader.load(org.bytedeco.openblas.presets.openblas.class);
-        Loader.load(org.bytedeco.cuda.presets.cupti.class);
-        Loader.load(org.bytedeco.cuda.presets.cudnn.class);
-        Loader.load(org.bytedeco.pytorch.presets.torch.class);
-        Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
+        Loader.load(javacpp.class);
+        Loader.load(openblas.class);
+        Loader.load(cupti.class);
+        Loader.load(cudnn.class);
+        Loader.load(torch.class);
+        Loader.load(torch_cuda.class);
     }
 
     @Override
     public void onEnable() {
-        // System.setProperty("org.bytedeco.javacpp.logger.debug", "true");
-        // System.setProperty("org.bytedeco.javacpp.logger.level", "debug");
-        // System.setProperty("org.bytedeco.openblas.load", "mkl");
+        PLUGIN = this;
 
-        System.out.println("org.bytedeco.openblas.global.openblas.blas_get_num_threads() = " + openblas.blas_get_num_threads());
-
-        //     val a = doubleArrayOf(1.0, 2.0, 3.0, 4.0)
-        //     val ipiv = IntArray(2)
-        //     val n = 2
-        //     val lda = 2
-        //     val info = openblas.LAPACKE_dgetrf(
-        //         openblas.LAPACK_ROW_MAJOR, n, n,
-        //         DoublePointer(*a), lda, ipiv
-        // )
-        int info = openblas.LAPACKE_dgetrf(openblas.LAPACK_ROW_MAJOR, 2, 2, new double[]{1.0, 2.0, 3.0, 4.0}, 2, new int[]{0, 0});
-        System.out.println("openblas.LAPACKE_dgetrf() info = " + info);
-
-        // loadExternalDependencies();
-
-
-        // System.setProperty("org.bytedeco.javacpp.logger.debug", "true");
-        // System.setProperty("org.bukkit.plugin.java.LibraryLoader.centralURL", "https://oss.sonatype.org/content/groups/public/");
-        // System.load("C:/Users/Aidan/.javacpp/cache/MachineLearningPlayer-1.0.0-SNAPSHOT.jar/org/bytedeco/pytorch/windows-x86_64/jnitorch.dll");
-        // Loader.load(org.bytedeco.javacpp.presets.javacpp.class);
-        // Loader.load(org.bytedeco.openblas.presets.openblas.class);
-        // Loader.load(org.bytedeco.pytorch.presets.torch.class);
-        // Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
-        // Loader.load(torch.class);
-
-
-        // try {
-        //     // Loader.load(org.bytedeco.cuda.presets.cupti.class);
-        //     // Loader.load(org.bytedeco.cuda.presets.cudnn.class);
-        //     // Loader.load(org.bytedeco.pytorch.presets.torch_cuda.class);
-        // } catch (UnsatisfiedLinkError e) {
-        //     String path = null;
-        //     try {
-        //         // path = Loader.cacheResource(org.bytedeco.cuda.presets.cupti.class, "windows-x86_64/jnicupti.dll").getPath();
-        //         // path = Loader.cacheResource(org.bytedeco.cuda.presets.cudnn.class, "windows-x86_64/jnicudnn.dll").getPath();
-        //         // path = Loader.cacheResource(org.bytedeco.pytorch.presets.torch_cuda.class, "windows-x86_64-gpu/jnitorch_cuda.dll").getPath();
-        //         new ProcessBuilder("C:/Program Files/Dependencies_x64_Release/DependenciesGui.exe", path).start().waitFor();
-        //     } catch (InterruptedException | IOException ex) {
-        //         throw new RuntimeException(ex);
-        //     }
-        // }
-        // Device device = args.cuda ? torch.device(torch.kCUDA) : torch.device(torch.kCPU);
-        System.out.println("torch.cuda_is_available() = " + org.bytedeco.pytorch.global.torch.cuda_is_available());
-        System.out.println("torch.cuda_device_count() = " + org.bytedeco.pytorch.global.torch.cuda_device_count());
-        System.out.println("torch.hasCUDA() = " + torch.hasCUDA());
+        // System.out.println("org.bytedeco.openblas.global.openblas.blas_get_num_threads() = " + openblas.blas_get_num_threads());
         //
-        Device device = new Device("cuda:0");
-        System.out.println("device = " + device);
-        System.out.println("is_cuda = " + device.is_cuda());
-        System.out.println("is_cpu = " + device.is_cpu());
-        System.out.println("type = " + device.type().toString());
+        // int info = openblas.LAPACKE_dgetrf(openblas.LAPACK_ROW_MAJOR, 2, 2, new double[]{1.0, 2.0, 3.0, 4.0}, 2, new int[]{0, 0});
+        // System.out.println("openblas.LAPACKE_dgetrf() info = " + info);
+        //
+        // System.out.println("torch.cuda_is_available() = " + org.bytedeco.pytorch.global.torch.cuda_is_available());
+        // System.out.println("torch.cuda_device_count() = " + org.bytedeco.pytorch.global.torch.cuda_device_count());
+        // System.out.println("torch.hasCUDA() = " + torch.hasCUDA());
+        // //
+        // Device device = new Device("cuda:0");
+        // System.out.println("device = " + device);
+        // System.out.println("is_cuda = " + device.is_cuda());
+        // System.out.println("is_cpu = " + device.is_cpu());
+        // System.out.println("type = " + device.type().toString());
 
 
         LOGGER = new Logger();
@@ -111,111 +83,32 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(this, this);
-        pluginManager.registerEvents(new EntityInteractEvent(), this);
-        pluginManager.registerEvents(new PlayerVEvent(), this);
         pluginManager.registerEvents(Debugger.DebugListener.INSTANCE, this);
 
         this.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             final Commands commands = event.registrar();
-            commands.register(MachineLearningCommand.register(), "Run the machine learning command");
+            commands.register(MachineLearningCommand.register(this), "Run the machine learning command");
         });
 
-        World world = Bukkit.getWorlds().getFirst();
-
-        world.setTime(0);
-        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
-        world.setWeatherDuration(0);
-        world.setStorm(false);
-        world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
-        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
-        world.setGameRule(GameRule.RANDOM_TICK_SPEED, 0);
-        world.setGameRule(GameRule.DO_ENTITY_DROPS, false);
-        world.setGameRule(GameRule.DO_TILE_DROPS, false);
-        world.setGameRule(GameRule.DO_INSOMNIA, false);
-        world.setGameRule(GameRule.DO_IMMEDIATE_RESPAWN, true);
-
-
-        // DedicatedServer server = ((CraftServer) Bukkit.getServer()).getServer();
-        // ServerTickRateManager serverTickRateManager = server.tickRateManager();
-        // if (serverTickRateManager.isSprinting()) {
-        //     serverTickRateManager.stopSprinting();
-        // }
-        // if (serverTickRateManager.isSteppingForward()) {
-        //     serverTickRateManager.stopStepping();
-        // }
-        // serverTickRateManager.setFrozen(true);
-
-        for (Entity entity : world.getEntities()) {
-            if (entity instanceof Player player) {
-                if (player.getGameMode() == GameMode.CREATIVE) {
-                    player.teleport(new Location(world, 16, 5, 20, 180, 0));
-                } else {
-                    player.kick();
-                }
-            } else {
-                entity.remove();
-            }
-        }
-
-        TrainingManager.setup();
+        Debugger.start();
 
         LOGGER.info("Hello, Machine Learning Player is starting!");
 
-        Debugger.start();
         new BukkitRunnable() {
             @Override
             public void run() {
-                // TODO: Pop the GPU part of this out into a separate thread. IDK how model updates will work with a new thread, maybe a bad idea
-                // Have minecraft continuously add to a queue of training steps
-                TrainingManager.trainingStep();
                 Debugger.update();
+                EvaluationManager.evaluationStep();
+                TrainingManager.trainingStep();
             }
         }.runTaskTimer(this, 0, 1);
-
-
-        // Net net = new Net();
-        //
-        // // Create a multi-threaded data loader for the MNIST dataset.
-        // MNISTMapDataset data_set = new MNIST("./data").map(new ExampleStack());
-        // MNISTRandomDataLoader data_loader = new MNISTRandomDataLoader(
-        //     data_set, new RandomSampler(data_set.size().get()),
-        //     new DataLoaderOptions(/*batch_size=*/64));
-        //
-        // // Instantiate an SGD optimization algorithm to update our Net's parameters.
-        // SGD optimizer = new SGD(net.parameters(), new SGDOptions(/*lr=*/0.01));
-        //
-        // for (int epoch = 1; epoch <= 10; ++epoch) {
-        //     int batch_index = 0;
-        //     // Iterate the data loader to yield batches from the dataset.
-        //     for (ExampleIterator it = data_loader.begin(); !it.equals(data_loader.end()); it = it.increment()) {
-        //         Example batch = it.access();
-        //         // Reset gradients.
-        //         optimizer.zero_grad();
-        //         // Execute the model on the input data.
-        //         Tensor prediction = net.forward(batch.data());
-        //         // Compute a loss value to judge the prediction of our model.
-        //         Tensor loss = nll_loss(prediction, batch.target());
-        //         // Compute gradients of the loss w.r.t. the parameters of our model.
-        //         loss.backward();
-        //         // Update the parameters based on the calculated gradients.
-        //         optimizer.step();
-        //         // Output the loss and checkpoint every 100 batches.
-        //         if (++batch_index % 100 == 0) {
-        //             System.out.println("Epoch: " + epoch + " | Batch: " + batch_index
-        //                 + " | Loss: " + loss.item_float());
-        //             // Serialize your model periodically as a checkpoint.
-        //             OutputArchive archive = new OutputArchive();
-        //             net.save(archive);
-        //             archive.save_to("net.pt");
-        //         }
-        //     }
-        // }
     }
 
     @Override
     public void onDisable() {
         Debugger.stop();
         TrainingManager.shutdown();
+        EvaluationManager.shutdown();
 
         for (World world : Bukkit.getWorlds()) {
             for (Entity entity : world.getEntities()) {
@@ -237,31 +130,50 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         event.getPlayer().sendMessage(Component.text("Hello, " + event.getPlayer().getName() + "!"));
     }
 
-    // @EventHandler
-    // public void onMove(PlayerMoveEvent event) {
-    //     System.out.println(event.getPlayer().getVelocity());
-    // }
+    @EventHandler
+    public void onPlayerFailMove(PlayerFailMoveEvent event) {
+        event.setAllowed(true);
+    }
 
-    // static class Net extends Module {
-    //     // Use one of many "standard library" modules.
-    //     final LinearImpl fc1, fc2, fc3;
-    //
-    //     Net() {
-    //         // Construct and register two Linear submodules.
-    //         fc1 = register_module("fc1", new LinearImpl(784, 64));
-    //         fc2 = register_module("fc2", new LinearImpl(64, 32));
-    //         fc3 = register_module("fc3", new LinearImpl(32, 10));
-    //     }
-    //
-    //     // Implement the Net's algorithm.
-    //     Tensor forward(Tensor x) {
-    //         // Use one of many tensor manipulation functions.
-    //         x = relu(fc1.forward(x.reshape(x.size(0), 784)));
-    //         x = dropout(x, /*p=*/0.5, /*train=*/is_training());
-    //         x = relu(fc2.forward(x));
-    //         x = log_softmax(fc3.forward(x), /*dim=*/1);
-    //         return x;
-    //     }
-    // }
+    @EventHandler
+    public void onPlayerVelocity(PlayerVelocityEvent e) {
+        ServerPlayer handle = ((CraftPlayer) e.getPlayer()).getHandle();
+        if (handle instanceof Agent) {
+            e.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onWorldLoad(WorldLoadEvent event) {
+        World world = event.getWorld();
+        world.setTime(0);
+        world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false);
+        world.setWeatherDuration(0);
+        world.setStorm(false);
+        world.setGameRule(GameRule.DO_WEATHER_CYCLE, false);
+        world.setGameRule(GameRule.DO_MOB_SPAWNING, false);
+        world.setGameRule(GameRule.RANDOM_TICK_SPEED, 0);
+        world.setGameRule(GameRule.DO_ENTITY_DROPS, false);
+        world.setGameRule(GameRule.DO_TILE_DROPS, false);
+        world.setGameRule(GameRule.DO_INSOMNIA, false);
+        world.setGameRule(GameRule.DO_IMMEDIATE_RESPAWN, true);
+
+        for (Entity entity : world.getEntities()) {
+            if (entity instanceof Player player) {
+                if (player.getGameMode() == GameMode.CREATIVE) {
+                    player.teleport(new Location(world, 16, 5, 20, 180, 0));
+                } else {
+                    player.kick();
+                }
+            } else {
+                entity.remove();
+            }
+        }
+    }
+
+    public enum Mode {
+        TRAINING,
+        EVALUATION
+    }
 
 }

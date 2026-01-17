@@ -15,7 +15,7 @@ import java.util.List;
 public class Utils {
 
     private static final HashMap<Character, Integer> characterWidths = new HashMap<>() {{
-        put(' ', 5);
+        put(' ', 4);
         put('!', 2);
         put('"', 5);
         put('#', 6);

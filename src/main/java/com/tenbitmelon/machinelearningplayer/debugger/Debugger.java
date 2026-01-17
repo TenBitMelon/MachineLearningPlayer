@@ -1,10 +1,13 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
+import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
+import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
+import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import com.tenbitmelon.machinelearningplayer.util.Utils;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -13,6 +16,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.joml.Vector3d;
 import org.slf4j.event.Level;
 
@@ -20,7 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.*;
 
 public class Debugger {
 
@@ -44,6 +48,38 @@ public class Debugger {
         mainDebugWindow.addControl(new BooleanControl(Component.text("Log Warn"), () -> LOGGER.isEnabled(Level.WARN), (value) -> LOGGER.setEnabled(Level.WARN, value)));
         mainDebugWindow.addControl(new BooleanControl(Component.text("Log Error"), () -> LOGGER.isEnabled(Level.ERROR), (value) -> LOGGER.setEnabled(Level.ERROR, value)));
         mainDebugWindow.addControl(new BooleanControl(Component.text("Log Trace"), () -> LOGGER.isEnabled(Level.TRACE), (value) -> LOGGER.setEnabled(Level.TRACE, value)));
+
+        // ML Manager Setup Controls
+        mainDebugWindow.addText(" ");
+        final var ref = new Object() {
+            Runnable removeButtons = null;
+        };
+        ButtonControl setupTraining = new ButtonControl(Component.text("Setup Training"), () -> {
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    CURRENT_MODE = Mode.TRAINING;
+                    TrainingManager.setup();
+                    ref.removeButtons.run();
+                }
+            }.runTaskLater(PLUGIN, 1);
+        });
+        ButtonControl setupEvaluation = new ButtonControl(Component.text("Setup Evaluation"), () -> {
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    CURRENT_MODE = Mode.EVALUATION;
+                    EvaluationManager.setup();
+                    ref.removeButtons.run();
+                }
+            }.runTaskLater(PLUGIN, 1);
+        });
+        ref.removeButtons = () -> {
+            mainDebugWindow.removeControl(setupEvaluation);
+            mainDebugWindow.removeControl(setupTraining);
+        };
+        mainDebugWindow.addControl(setupTraining);
+        mainDebugWindow.addControl(setupEvaluation);
 
         mainDebugWindow.setPosition(new Vector3d(16, 3, 16));
         addElement(mainDebugWindow);

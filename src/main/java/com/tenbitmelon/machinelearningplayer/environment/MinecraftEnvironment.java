@@ -2,12 +2,11 @@ package com.tenbitmelon.machinelearningplayer.environment;
 
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
-import com.tenbitmelon.machinelearningplayer.debugger.Logger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.util.BlockDisplayBuilder;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.Brightness;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.*;
@@ -19,23 +18,21 @@ import org.joml.Vector3d;
 
 import java.util.concurrent.CompletableFuture;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 import static com.tenbitmelon.machinelearningplayer.util.Utils.szudzikUnpairing;
 
 public class MinecraftEnvironment {
 
-    public static final int CIRCLE_RADIUS = 2;
+    public static final int CIRCLE_RADIUS = 4;
     private static int nextEnvironmentId = 0;
-
+    public final Location roomLocation;
+    public final Vec3 centerPosition;
+    public final int environmentId;
     private final ExperimentConfig args;
-    private final Location roomLocation;
     private final Material randomConcrete;
-    private final Vec3 centerPosition;
+    public Agent agent;
+    public Entity targetEntity;
     TextWindow environmentLog;
-    private Agent agent;
     private int currentStep = 0;
-    private MinecraftEnvironment oppositeEnvironment;
-    private int environmentId;
 
     public MinecraftEnvironment(ExperimentConfig args) {
         this.args = args;
@@ -144,8 +141,8 @@ public class MinecraftEnvironment {
         return new double[]{x, y};
     }
 
-    public void setOppositeOf(MinecraftEnvironment environment) {
-        this.oppositeEnvironment = environment;
+    public void setTarget(Entity target) {
+        this.targetEntity = target;
     }
 
     public Observation getObservation() {
@@ -160,7 +157,7 @@ public class MinecraftEnvironment {
         float yawRadians = (float) Math.toRadians(agent.getYRot());
         // yRot rotates clockwise around the Y axis, which is the opposite of what I expected,
         // so we don't need to negate the angle because its already doing that
-        Vec3 opponentDirectionWorldSpace = oppositeEnvironment.agent.position().subtract(agent.position());
+        Vec3 opponentDirectionWorldSpace = targetEntity.position().subtract(agent.position());
         float opponentDistance = (float) opponentDirectionWorldSpace.length();
         opponentDirectionWorldSpace = opponentDirectionWorldSpace.normalize();
         Vec3 opponentDirectionLocalSpace = opponentDirectionWorldSpace.yRot(yawRadians);
@@ -249,7 +246,7 @@ public class MinecraftEnvironment {
     public StepResult postTickStep() {
 
         double myDist = getDistanceToCenter(this.agent);
-        double oppDist = getDistanceToCenter(oppositeEnvironment.agent);
+        double oppDist = getDistanceToCenter(targetEntity);
 
         boolean iAmIn = myDist <= CIRCLE_RADIUS;
         boolean oppIsIn = oppDist <= CIRCLE_RADIUS;
@@ -282,7 +279,7 @@ public class MinecraftEnvironment {
         return new StepResult(observation, reward, terminated, truncated);
     }
 
-    private double getDistanceToCenter(Agent targetAgent) {
+    private double getDistanceToCenter(Entity targetAgent) {
         Vec3 pos = targetAgent.position();
         return Math.sqrt(
             Math.pow(pos.x - centerPosition.x, 2) +
@@ -293,5 +290,4 @@ public class MinecraftEnvironment {
     public boolean isReady() {
         return agent != null && agent.isReady();
     }
-
 }

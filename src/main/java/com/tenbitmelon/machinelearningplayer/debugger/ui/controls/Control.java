@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 
 public abstract class Control {
+    public static final float DISPLAY_PIXEL_WIDTH = (1f / 38f);
     private final HashMap<UUID, ClickEvent> interactionEntityToClickEvent = new HashMap<>();
     private final HashMap<UUID, Interaction> uuidToInteraction = new HashMap<>();
     public Component label;
@@ -101,7 +102,7 @@ public abstract class Control {
             Interaction interaction = uuidToInteraction.get(uuids.get(i));
             interactionEntityToClickEvent.put(interaction.getUniqueId(), clickEvent.getRight());
 
-            float interactionWidth = (clickEvent.getMiddle() - clickEvent.getLeft()) * (1f / 40f);
+            float interactionWidth = (clickEvent.getMiddle() - clickEvent.getLeft()) * DISPLAY_PIXEL_WIDTH;
 
 
             updateInteractionPosition(interaction, clickEvent, longestLabel, lineWidth, position, direction, line, interactionWidth);
@@ -111,7 +112,7 @@ public abstract class Control {
         if (neededInteractions > currentInteractions) {
             for (int i = currentInteractions; i < neededInteractions; i++) {
                 MutableTriple<Integer, Integer, ClickEvent> clickEvent = clickEvents.get(i);
-                float interactionWidth = (clickEvent.getMiddle() - clickEvent.getLeft()) * (1f / 40f);
+                float interactionWidth = (clickEvent.getMiddle() - clickEvent.getLeft()) * DISPLAY_PIXEL_WIDTH;
 
                 Interaction interaction = new InteractionBuilder(Debugger.WORLD)
                     .width(interactionWidth)
@@ -171,5 +172,9 @@ public abstract class Control {
             }
         }
         return false;
+    }
+
+    public void remove() {
+        clearAllInteractions();
     }
 }

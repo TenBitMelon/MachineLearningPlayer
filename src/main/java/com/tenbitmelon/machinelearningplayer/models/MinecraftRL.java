@@ -23,8 +23,10 @@ public class MinecraftRL extends Module {
     final LinearImpl actorSprintSneakKeys;
     final LinearImpl critic;
     final LinearImpl actorAttackUseItem;
+    final Device device;
 
-    public MinecraftRL(SyncedVectorEnvironment environment) {
+    public MinecraftRL(Device device) {
+        this.device = device;
         /*
         other_features_dim = 128
         self.network = nn.Sequential(
@@ -37,9 +39,9 @@ public class MinecraftRL extends Module {
 
         long observationSize = Observation.OBSERVATION_SPACE_SIZE;
 
-        LinearImpl networkLinear1 = createLinearLayer(observationSize, 64);
+        LinearImpl networkLinear1 = createLinearLayer(observationSize, 64, device);
         TanhImpl networkTanh1 = new TanhImpl();
-        LinearImpl networkLinear2 = createLinearLayer(64, 64);
+        LinearImpl networkLinear2 = createLinearLayer(64, 64, device);
         TanhImpl networkTanh2 = new TanhImpl();
 
         SequentialImpl network = new SequentialImpl();
@@ -69,7 +71,7 @@ public class MinecraftRL extends Module {
             if (name.contains("bias")) {
                 torch.constant_(param, new Scalar(0.0f));
             } else if (name.contains("weight")) {
-                orthogonal_(param, Math.sqrt(1.0));
+                orthogonal_(param, Math.sqrt(1.0), device);
             }
         }
 
@@ -82,11 +84,11 @@ public class MinecraftRL extends Module {
         self.y_actor = layer_init(nn.Linear(64, 3), std=0.01)
         */
 
-        LinearImpl actorForwardMoveKeys = createLinearLayer(64, 3, 0.01);
+        LinearImpl actorForwardMoveKeys = createLinearLayer(64, 3, 0.01, device);
         register_module("actor_forward_move_keys", actorForwardMoveKeys);
         this.actorForwardMoveKeys = actorForwardMoveKeys;
 
-        LinearImpl actorStrafingMoveKeys = createLinearLayer(64, 3, 0.01);
+        LinearImpl actorStrafingMoveKeys = createLinearLayer(64, 3, 0.01, device);
         register_module("actor_strafing_move_keys", actorStrafingMoveKeys);
         this.actorStrafingMoveKeys = actorStrafingMoveKeys;
 
@@ -95,14 +97,14 @@ public class MinecraftRL extends Module {
         self.rot_logstd = nn.Parameter(torch.ones(1) * -1.0)
         */
 
-        LinearImpl yawMean = createLinearLayer(64, 1, 0.01);
+        LinearImpl yawMean = createLinearLayer(64, 1, 0.01, device);
         register_module("yaw_mean", yawMean);
         this.yawMean = yawMean;
         Tensor yawLogSTD = torch.ones(new long[]{1}, new TensorOptions(torch.ScalarType.Float)).mul(new Scalar(-1.0f));
         register_parameter("yaw_logstd", yawLogSTD);
         this.yawLogSTD = yawLogSTD;
 
-        LinearImpl pitchMean = createLinearLayer(64, 1, 0.01);
+        LinearImpl pitchMean = createLinearLayer(64, 1, 0.01, device);
         register_module("pitch_mean", pitchMean);
         this.pitchMean = pitchMean;
         Tensor pitchLogSTD = torch.ones(new long[]{1}, new TensorOptions(torch.ScalarType.Float)).mul(new Scalar(-1.0f));
@@ -110,18 +112,18 @@ public class MinecraftRL extends Module {
         this.pitchLogSTD = pitchLogSTD;
 
         // Jump
-        LinearImpl actorJumpKey = createLinearLayer(64, 2, 0.01); // 2 outputs: jump or not jump
+        LinearImpl actorJumpKey = createLinearLayer(64, 2, 0.01, device); // 2 outputs: jump or not jump
         register_module("actor_jump_key", actorJumpKey);
         this.actorJumpKey = actorJumpKey;
 
         // Sprint & Sneak
 
-        LinearImpl actorSprintSneakKeys = createLinearLayer(64, 3, 0.01); // 3 outputs: no sprint/sneak, sprint, sneak
+        LinearImpl actorSprintSneakKeys = createLinearLayer(64, 3, 0.01, device); // 3 outputs: no sprint/sneak, sprint, sneak
         register_module("actor_sprint_sneak_keys", actorSprintSneakKeys);
         this.actorSprintSneakKeys = actorSprintSneakKeys;
 
         // Attack & Use
-        LinearImpl actorAttackUseItem = createLinearLayer(64, 3, 0.01); // 3 outputs: no attack/use, attack, use
+        LinearImpl actorAttackUseItem = createLinearLayer(64, 3, 0.01, device); // 3 outputs: no attack/use, attack, use
         register_module("actor_attack_use_item", actorAttackUseItem);
         this.actorAttackUseItem = actorAttackUseItem;
 
@@ -129,12 +131,12 @@ public class MinecraftRL extends Module {
         self.critic = layer_init(nn.Linear(64, 1), std=1)
         */
 
-        LinearImpl criticLinear = createLinearLayer(64, 1, 1.0);
+        LinearImpl criticLinear = createLinearLayer(64, 1, 1.0, device);
         register_module("critic", criticLinear);
         this.critic = criticLinear;
     }
 
-    static void orthogonal_(Tensor tensor, double std) {
+    static void orthogonal_(Tensor tensor, double std, Device device) {
         // if tensor.ndimension() < 2:
         //  raise ValueError("Only tensors with 2 or more dimensions are supported")
 
@@ -178,7 +180,7 @@ public class MinecraftRL extends Module {
         // q *= ph
 
         // Move tensor to GPU because LAPACK is not available on CPU in libtorch Java
-        flattened = flattened.to(TrainingManager.device, torch.ScalarType.Float);
+        flattened = flattened.to(device, torch.ScalarType.Float);
         T_TensorTensor_T qr = torch.linalg_qr(flattened);
 
         Tensor qGpu = qr.get0();
@@ -208,17 +210,17 @@ public class MinecraftRL extends Module {
         AutogradState.get_tls_state().set_grad_mode(true);
     }
 
-    static LinearImpl createLinearLayer(long inputsDim, long outputDims, double std) {
+    static LinearImpl createLinearLayer(long inputsDim, long outputDims, double std, Device device) {
         LinearImpl layer = new LinearImpl(inputsDim, outputDims);
 
-        orthogonal_(layer.weight(), std);
+        orthogonal_(layer.weight(), std, device);
         torch.constant_(layer.bias(), new Scalar(0.0f));
         return layer;
     }
 
-    static LinearImpl createLinearLayer(long inputsDim, long outputDims) {
+    static LinearImpl createLinearLayer(long inputsDim, long outputDims, Device device) {
         double root2 = Math.sqrt(2.0);
-        return createLinearLayer(inputsDim, outputDims, root2);
+        return createLinearLayer(inputsDim, outputDims, root2, device);
     }
 
     // Tensor observation is [B, OBSERVATION_SPACE_SIZE]
@@ -250,7 +252,7 @@ public class MinecraftRL extends Module {
 
         startingHiddenState.close();
 
-        Tensor ones = torch.ones_like(done, new TensorOptions(TrainingManager.device), null); // size (B, batchSize)
+        Tensor ones = torch.ones_like(done, new TensorOptions(device), null); // size (B, batchSize)
         Tensor oneSubDone = ones.sub_(done); // size (B, batchSize)
 
         TensorVector hiddenList = torch.unbind(hidden, 0);
