@@ -36,6 +36,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.portal.TeleportTransition;
+import net.minecraft.world.phys.Vec3;
 import org.bukkit.Location;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.event.player.PlayerGameModeChangeEvent;
@@ -46,6 +47,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
 import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class Agent extends ServerPlayer {
@@ -137,15 +139,16 @@ public class Agent extends ServerPlayer {
 
         observationSectionControls.add(new TextControl(""));
         observationSectionControls.add(new TextControl("Latest Observation:"));
-        // observationSectionControls.add(new TextControl("Position in Block", tensorString(observation.positionInBlock())));
-        // observationSectionControls.add(new TextControl("Velocity", tensorString(observation.velocity())));
         observationSectionControls.add(new TextControl("Pitch", tensorString(observation.pitch())));
         observationSectionControls.add(new TextControl("Sprinting", tensorString(observation.sprinting())));
         observationSectionControls.add(new TextControl("Sneaking", tensorString(observation.sneaking())));
         observationSectionControls.add(new TextControl("On Ground", tensorString(observation.onGround())));
-        observationSectionControls.add(new TextControl("Center Distance", tensorString(observation.centerDistance())));
         observationSectionControls.add(new TextControl("Opponent Vec", tensorString(observation.opponentDirectionVec())));
         observationSectionControls.add(new TextControl("Opponent Distance", tensorString(observation.opponentDistance())));
+        observationSectionControls.add(new TextControl("Opponent Velocity Vec", tensorString(observation.opponentVelocityVec())));
+        observationSectionControls.add(new TextControl("Attack Cooldown", tensorString(observation.attackCooldown())));
+        observationSectionControls.add(new TextControl("Health", this.getHealth() + "/" + this.getMaxHealth()));
+
 
         for (Control control : observationSectionControls) {
             debugWindow.addControl(control);
@@ -247,7 +250,7 @@ public class Agent extends ServerPlayer {
         return this.actionPack;
     }
 
-    public void reset(Location location) {
+    public void reset(Vec3 location) {
         this.reset();
         this.actionPack.stopAll();
 
@@ -255,7 +258,11 @@ public class Agent extends ServerPlayer {
         float xRot = (float) (Math.random() * 180.0f - 90.0f); // Pitch
         // float xRot = 0.0f;
         // float yRot = 0.0f;
-        this.teleportTo(((CraftWorld) location.getWorld()).getHandle(), location.getX(), location.getY(), location.getZ(), Set.of(), yRot, xRot, true);
-        this.snapTo(location.getX(), location.getY(), location.getZ(), yRot, xRot);
+        this.teleportTo(((CraftWorld) WORLD).getHandle(), location.x(), location.y(), location.z(), Set.of(), yRot, xRot, true);
+        this.snapTo(location.x(), location.y(), location.z(), yRot, xRot);
+    }
+
+    public float getAttackStrengthTicker() {
+        return this.attackStrengthTicker;
     }
 }

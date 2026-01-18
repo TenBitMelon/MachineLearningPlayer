@@ -29,7 +29,6 @@ import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.*;
 public class Debugger {
 
     public static final HashMap<UUID, UIElement> AWAITING_ANCHOR = new HashMap<>();
-    public static final World WORLD = Bukkit.getWorlds().getFirst();
     public static final HashMap<UUID, UIElement> DRAGGED_ELEMENTS = new HashMap<>();
     public static final ControlsWindow mainDebugWindow;
     static final ArrayList<UIElement> elements = new ArrayList<>();

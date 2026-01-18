@@ -6,7 +6,7 @@ import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
 public record VectorStepResult(Observation[] observations, double[] rewards, boolean[] terminated,
-                               boolean[] truncated) {
+                               boolean[] truncated) implements AutoCloseable {
     public int[] logicalOrTerminationsAndTruncations() {
         // stepResult.terminated() || stepResult.truncated();
         int[] ors = new int[terminated.length];
@@ -44,5 +44,12 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
             }
         }
         return count;
+    }
+
+    @Override
+    public void close() {
+        for (Observation observation : observations) {
+            observation.close();
+        }
     }
 }

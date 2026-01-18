@@ -35,9 +35,9 @@ import org.slf4j.event.Level;
 @SuppressWarnings("UnstableApiUsage")
 public final class MachineLearningPlayer extends JavaPlugin implements Listener {
 
+    public static World WORLD = null;
     public static Mode CURRENT_MODE = null;
     public static Logger LOGGER = null;
-
     public static MachineLearningPlayer PLUGIN = null;
 
     static {
@@ -61,6 +61,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
     @Override
     public void onEnable() {
         PLUGIN = this;
+        WORLD = Bukkit.getWorlds().getFirst();
 
         // System.out.println("org.bytedeco.openblas.global.openblas.blas_get_num_threads() = " + openblas.blas_get_num_threads());
         //

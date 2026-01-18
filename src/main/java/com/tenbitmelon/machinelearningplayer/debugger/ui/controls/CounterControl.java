@@ -12,6 +12,8 @@ import org.joml.Matrix4f;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
+
 public class CounterControl extends Control {
     final BlockDisplay blockDisplay;
     private final Supplier<Integer> getter;
@@ -21,7 +23,7 @@ public class CounterControl extends Control {
         super(title);
         this.getter = value;
         this.setter = setter;
-        blockDisplay = new BlockDisplayBuilder(Debugger.WORLD).block(Material.MELON.createBlockData()).build();
+        blockDisplay = new BlockDisplayBuilder(WORLD).block(Material.MELON.createBlockData()).build();
         blockDisplay.setTransformationMatrix(new Matrix4f().scale(0.2f));
     }
 

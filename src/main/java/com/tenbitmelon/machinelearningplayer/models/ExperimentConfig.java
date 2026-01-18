@@ -1,5 +1,7 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
+import javax.annotation.Nullable;
+
 public class ExperimentConfig {
 
     public static final ExperimentConfig config = new ExperimentConfig();
@@ -75,7 +77,8 @@ public class ExperimentConfig {
     /**
      * The checkpoint to start from.
      */
-    public Integer startingCheckpoint = 3300;
+    @Nullable
+    public Integer startingCheckpoint = null;
 
     private ExperimentConfig() {}
 

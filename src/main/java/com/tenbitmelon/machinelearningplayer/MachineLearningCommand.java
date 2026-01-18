@@ -19,6 +19,7 @@ import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSele
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import org.bukkit.*;
 import org.bukkit.command.CommandSender;
 import org.bukkit.craftbukkit.entity.CraftEntity;
@@ -131,7 +132,11 @@ public class MachineLearningCommand {
                     Entity entity = entitySelectorArgumentResolver.resolve(ctx.getSource()).getFirst();
 
                     net.minecraft.world.entity.Entity handle = ((CraftEntity) entity).getHandle();
-                    EvaluationManager.getEnvironment().setTarget(handle);
+                    if (!(handle instanceof LivingEntity)) {
+                        ctx.getSource().getSender().sendPlainMessage("Target must be a living entity.");
+                        return Command.SINGLE_SUCCESS;
+                    }
+                    EvaluationManager.getEnvironment().setTarget((LivingEntity) handle);
                     ctx.getSource().getSender().sendPlainMessage("Set evaluation target to " + handle.getName());
 
                 }

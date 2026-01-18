@@ -4,7 +4,7 @@ import net.minecraft.world.phys.Vec2;
 import org.bytedeco.javacpp.FloatPointer;
 import org.bytedeco.pytorch.Tensor;
 
-public class Action {
+public class Action implements AutoCloseable {
 
     private static final int SIZE_JUMPING = 1;
     private static final int SIZE_SPRINTING_SNEAKING = 1;
@@ -87,5 +87,11 @@ public class Action {
      */
     public int attackUseItem() {
         return (int) cachedData.get(OFFSET_ATTACK_USE_ITEM);
+    }
+
+    @Override
+    public void close() throws Exception {
+        data.close();
+        cachedData.close();
     }
 }

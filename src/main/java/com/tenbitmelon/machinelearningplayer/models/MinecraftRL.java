@@ -3,11 +3,16 @@ package com.tenbitmelon.machinelearningplayer.models;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import com.tenbitmelon.machinelearningplayer.util.distributions.Categorical;
 import com.tenbitmelon.machinelearningplayer.util.distributions.Normal;
+import org.bytedeco.javacpp.PointerScope;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.Module;
 import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
+
+import java.util.Arrays;
+
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class MinecraftRL extends Module {
 
@@ -225,6 +230,7 @@ public class MinecraftRL extends Module {
 
     // Tensor observation is [B, OBSERVATION_SPACE_SIZE]
     public States getStates(Tensor observation, LSTMState lstmState, Tensor done) {
+        PointerScope scope = new PointerScope();
         /*
         hidden = self.network(x)
          */
@@ -270,8 +276,10 @@ public class MinecraftRL extends Module {
             new_hidden += [h]
          */
         for (int i = 0; i < seqLen; i++) {
-            Tensor h = hiddenList.get(i).unsqueeze(0); // size (1, batchSize, input_size)
-            Tensor d = oneSubDoneList.get(i) // size (batchSize,)
+            Tensor h1 = hiddenList.get(i);
+            Tensor h = h1.unsqueeze(0); // size (1, batchSize, input_size)
+            Tensor d1 = oneSubDoneList.get(i);
+            Tensor d = d1 // size (batchSize,)
                 .view(1, -1, 1); // Reshape to (1, batchSize, 1)
 
             Tensor newHiddenState = hiddenState.mul(d); // Hidden state size (1, batchSize, hidden_size)
@@ -285,6 +293,11 @@ public class MinecraftRL extends Module {
 
             newHiddenState.close();
             newCellState.close();
+            h1.close();
+            h.close();
+            d1.close();
+            d.close();
+            inputState.close();
 
             newHidden.push_back(hNew_LSTMState.get0());
 
@@ -297,11 +310,24 @@ public class MinecraftRL extends Module {
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
          */
         Tensor newHiddenTensor = torch.flatten(torch.cat(newHidden), 0, 1);
+        for (int i = 0; i < newHidden.size(); i++) {
+            newHidden.get(i).close();
+        }
+        newHidden.close();
+
+        hiddenState = hiddenState.clone();
+        hiddenState.retainReference();
+        cellState = cellState.clone();
+        cellState.retainReference();
+        newHiddenTensor.retainReference();
+
+        scope.close();
 
         /*
         return new_hidden, lstm_state
          */
-        return new States(newHiddenTensor, new LSTMState(hiddenState, cellState));
+        LSTMState lstmState1 = new LSTMState(hiddenState, cellState);
+        return new States(newHiddenTensor, lstmState1);
     }
 
     /**
@@ -320,6 +346,8 @@ public class MinecraftRL extends Module {
         States states = this.getStates(observation, lstmState, done);
         Tensor hidden = states.newHiddenTensor;
 
+        states.close();
+
         /*
         return self.critic(hidden)
          */
@@ -336,6 +364,8 @@ public class MinecraftRL extends Module {
          */
         States states = this.getStates(observation, lstmState, done);
         Tensor hidden = states.newHiddenTensor;
+
+        PointerScope scope = new PointerScope();
 
         /*
         x_logits = self.x_actor(hidden)
@@ -490,6 +520,16 @@ public class MinecraftRL extends Module {
 
         Tensor value = this.critic.forward(hidden);
 
+        action.retainReference();
+        totalLogProbs.retainReference();
+        totalEntropy.retainReference();
+        value.retainReference();
+
+        scope.close();
+
+        // states.close();
+        hidden.close();
+
         return new ActionAndValue(
             action,
             totalLogProbs,
@@ -585,7 +625,13 @@ public class MinecraftRL extends Module {
      * @param newHiddenTensor Shape (numEnvs, batchSize, hiddenSize)
      * @param lstmState       The LSTM state after processing the observation.
      */
-    public record States(Tensor newHiddenTensor, MinecraftRL.LSTMState lstmState) {}
+    public record States(Tensor newHiddenTensor, MinecraftRL.LSTMState lstmState) implements AutoCloseable {
+        @Override
+        public void close() {
+            newHiddenTensor.close();
+            lstmState.close();
+        }
+    }
 
     /**
      * Holds the action, total log probabilities, total entropy, value, and LSTM state.
@@ -597,5 +643,13 @@ public class MinecraftRL extends Module {
      * @param lstmState     The LSTM state after processing the observation.
      */
     public record ActionAndValue(Tensor action, Tensor totalLogProbs, Tensor totalEntropy, Tensor value,
-                                 MinecraftRL.LSTMState lstmState) {}
+                                 MinecraftRL.LSTMState lstmState) implements AutoCloseable {
+        @Override
+        public void close() {
+            action.close();
+            totalLogProbs.close();
+            totalEntropy.close();
+            value.close();
+        }
+    }
 }

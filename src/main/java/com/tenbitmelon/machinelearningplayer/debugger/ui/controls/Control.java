@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
+
 public abstract class Control {
     public static final float DISPLAY_PIXEL_WIDTH = (1f / 38f);
     private final HashMap<UUID, ClickEvent> interactionEntityToClickEvent = new HashMap<>();
@@ -114,7 +116,7 @@ public abstract class Control {
                 MutableTriple<Integer, Integer, ClickEvent> clickEvent = clickEvents.get(i);
                 float interactionWidth = (clickEvent.getMiddle() - clickEvent.getLeft()) * DISPLAY_PIXEL_WIDTH;
 
-                Interaction interaction = new InteractionBuilder(Debugger.WORLD)
+                Interaction interaction = new InteractionBuilder(WORLD)
                     .width(interactionWidth)
                     .height(0.25f)
                     .build();
@@ -149,7 +151,7 @@ public abstract class Control {
         planarPosition.rotateAxis(angle, 0, 1, 0);
         planarPosition.add(position);
 
-        interaction.teleport(new Location(Debugger.WORLD, planarPosition.x, planarPosition.y, planarPosition.z));
+        interaction.teleport(new Location(WORLD, planarPosition.x, planarPosition.y, planarPosition.z));
     }
 
     private void clearAllInteractions() {

@@ -29,6 +29,7 @@ public class TrainingManager {
     static public boolean runTraining = false;
     static public boolean sprint = false;
     public static Device device;
+    public static int iteration = 1;
     static ExperimentConfig args = ExperimentConfig.getInstance();
     // Pre computes:
     private static final Scalar SCALAR_GAMMA = new Scalar(args.gamma);
@@ -51,7 +52,6 @@ public class TrainingManager {
     static AdamOptions adamOptions;
     static Adam optimizer;
     static long iterationStartTime = System.currentTimeMillis();
-    static int iteration = 1;
     static int step = 0;
     static String logText = "";
     static TrainingLogger trainingLogger;
@@ -188,6 +188,7 @@ public class TrainingManager {
             LOGGER.info("Initial environment reset...");
             resetResult = environment.reset();
             nextObs = resetResult.observationsTensor().to(device, torch.ScalarType.Float);
+            resetResult.close();
         }
 
         if (sprint) {
@@ -274,7 +275,9 @@ public class TrainingManager {
          */
 
         // globalStep += args.numEnvs;
-        observations.get(step).copy_(nextObs.detach());
+        try (Tensor slice = observations.get(step)) {
+            slice.copy_(nextObs.detach());
+        }
         dones.get(step).copy_(nextDone);
 
         /*
@@ -289,11 +292,15 @@ public class TrainingManager {
         AutogradState.get_tls_state().set_grad_mode(false); // with torch.no_grad():
 
         MinecraftRL.ActionAndValue actionResult = model.getActionAndValue(nextObs, nextLstmState, nextDone);
-        nextLstmState.copy_(actionResult.lstmState());
+        if (nextLstmState != null) nextLstmState.close();
+        nextLstmState = actionResult.lstmState();
+        nextLstmState.retainReference();
 
-        Tensor actionResultValue = actionResult.value();
-        values.get(step).copy_(actionResultValue.flatten());
-        actionResultValue.close();
+        try (Tensor slice = values.get(step)) {
+            try (Tensor flattened = actionResult.value().flatten()) {
+                slice.copy_(flattened);
+            }
+        }
 
         AutogradState.get_tls_state().set_grad_mode(true);
 
@@ -314,6 +321,8 @@ public class TrainingManager {
         Tensor actionTensor = actionResultAction.cpu();
         actionResultAction.close();
         environment.preTickStep(actionTensor);
+
+        actionResult.close();
 
         needsPostTickStep = true;
         scope.close();
@@ -355,6 +364,8 @@ public class TrainingManager {
 
         numTerminations += stepResult.numTerminations();
         numTruncations += stepResult.numTruncations();
+
+        stepResult.close();
 
         /*
         if "final_info" in infos:
@@ -505,18 +516,27 @@ public class TrainingManager {
 
 
         for (int epoch = 0; epoch < args.updateEpochs; epoch++) {
+            PointerScope epochScope = new PointerScope();
 
             /*
             np.random.shuffle(envinds)
              */
             Tensor randperm = torch.randperm(args.numEnvs, new TensorOptions(device));
             envinds = envinds.index_select(0, randperm);
+            envinds.retainReference();
 
             /*
             for start in range(0, args.num_envs, envsperbatch):
              */
 
             for (int start = 0; start < args.numEnvs; start += envsPerBatch) {
+                if (vLoss != null) vLoss.close();
+                if (pgLoss != null) pgLoss.close();
+                if (entropyLoss != null) entropyLoss.close();
+                if (approxKl != null) approxKl.close();
+                if (oldApproxKl != null) oldApproxKl.close();
+
+                PointerScope batchScope = new PointerScope();
                 /*
                 end = start + envsperbatch
                 mbenvinds = envinds[start:end]
@@ -592,6 +612,7 @@ public class TrainingManager {
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
                 */
 
+
                 Tensor pgLoss1 = mbAdvantages.neg().mul(ratio);
                 Tensor pgLoss2 = mbAdvantages.neg().mul(
                     torch.clamp(ratio, SCALAR_1_SUB_CLIP_COEF, SCALAR_1_ADD_CLIP_COEF)
@@ -609,6 +630,8 @@ public class TrainingManager {
                  */
                 Tensor bReturnsMbInds = bReturns.index_select(0, mb_inds);
                 Tensor bValueMbInds = bValues.index_select(0, mb_inds);
+
+
                 if (args.clipVloss) {
                     /*
                     v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
@@ -666,6 +689,16 @@ public class TrainingManager {
                 loss.backward();
                 torch.clip_grad_norm_(modelParameters, args.maxGradNorm);
                 optimizer.step();
+
+                actionAndValueResult.close();
+                
+                vLoss.retainReference();
+                pgLoss.retainReference();
+                entropyLoss.retainReference();
+                approxKl.retainReference();
+                oldApproxKl.retainReference();
+
+                batchScope.close();
             }
 
             /*
@@ -676,6 +709,8 @@ public class TrainingManager {
                 LOGGER.warn("Target KL ({}) exceeded ({}). Breaking from update epochs.", args.targetKl, approxKl.item().toFloat());
                 break;
             }
+
+            epochScope.close();
         }
 
 

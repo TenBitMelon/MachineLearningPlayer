@@ -7,6 +7,7 @@ import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.*;
 import com.tenbitmelon.machinelearningplayer.environment.*;
 import net.kyori.adventure.text.Component;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -23,8 +24,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.Set;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.*;
 
 public class EvaluationManager {
 
@@ -58,7 +58,7 @@ public class EvaluationManager {
         // Use single environment for evaluation
         args.numEnvs = 1;
 
-        Entity armorStand = ((CraftEntity) Debugger.WORLD.spawnEntity(new Location(Debugger.WORLD, 16.0, 8.0, 16.0), EntityType.ARMOR_STAND)).getHandle();
+        LivingEntity armorStand = (LivingEntity) ((CraftEntity) WORLD.spawnEntity(new Location(WORLD, 16.0, 8.0, 16.0), EntityType.ARMOR_STAND)).getHandle();
         armorStand.setInvulnerable(true);
         environment = new MinecraftEnvironment(args);
         environment.setTarget(armorStand);
@@ -180,9 +180,9 @@ public class EvaluationManager {
                     ResetResult resetResult = environment.reset();
                     observation = resetResult.observation();
 
-                    Vec3 location = environment.centerPosition.add(0.0, 0.1, -MinecraftEnvironment.CIRCLE_RADIUS / 2.0);
+                    Vec3 location = environment.centerPosition.add(0.0, 0.1, -1 / 2.0);
 
-                    environment.targetEntity.teleportTo(((CraftWorld) environment.roomLocation.getWorld()).getHandle(), location.x(), location.y(), location.z(), Set.of(), 0, 0, true);
+                    environment.targetEntity.teleportTo(((CraftWorld) WORLD).getHandle(), location.x(), location.y(), location.z(), Set.of(), 0, 0, true);
                     environment.targetEntity.snapTo(location.x(), location.y(), location.z(), 0, 0);
                 }
 

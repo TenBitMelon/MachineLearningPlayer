@@ -13,6 +13,8 @@ import org.bukkit.util.Vector;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
+
 public abstract class UIElement {
 
     public static boolean ALLOW_UPDATES = true; // Set to false to disable updates for all UIElements, useful for performance during training
@@ -25,8 +27,8 @@ public abstract class UIElement {
     private boolean visible = true;
 
     public UIElement() {
-        anchorText = new TextDisplayBuilder(Debugger.WORLD).text("≡≡≡").billboard(Display.Billboard.VERTICAL).teleportDuration(1).build(); // Braille Pattern "⠿" (U+283F) or Full Square "⬛" (U+2B1B) or Identical to "≡" (U+2261)
-        anchorInteraction = new InteractionBuilder(Debugger.WORLD).width(0.5).height(0.3).responsive(true).build();
+        anchorText = new TextDisplayBuilder(WORLD).text("≡≡≡").billboard(Display.Billboard.VERTICAL).teleportDuration(1).build(); // Braille Pattern "⠿" (U+283F) or Full Square "⬛" (U+2B1B) or Identical to "≡" (U+2261)
+        anchorInteraction = new InteractionBuilder(WORLD).width(0.5).height(0.3).responsive(true).build();
         Debugger.addElement(this);
     }
 

@@ -5,7 +5,7 @@ import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
-public record VectorResetResult(Observation[] observations) {
+public record VectorResetResult(Observation[] observations) implements AutoCloseable {
     public Tensor observationsTensor() {
         TensorVector tensorVector = new TensorVector();
         for (Observation observation : observations) {
@@ -13,5 +13,12 @@ public record VectorResetResult(Observation[] observations) {
             tensorVector.push_back(tensor);
         }
         return torch.stack(tensorVector, 0);  // Stack along batch dimension
+    }
+
+    @Override
+    public void close() {
+        for (Observation observation : observations) {
+            observation.close();
+        }
     }
 }

@@ -12,6 +12,8 @@ import org.joml.Vector3d;
 
 import java.util.ArrayList;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
+
 public class TextWindow extends UIElement {
 
     final ArrayList<Component> lines = new ArrayList<>();
@@ -23,7 +25,7 @@ public class TextWindow extends UIElement {
     }
 
     public TextWindow(Display.Billboard billboard, TextDisplay.TextAlignment alignment) {
-        display = new TextDisplayBuilder(Debugger.WORLD)
+        display = new TextDisplayBuilder(WORLD)
             .billboard(billboard)
             .alignment(alignment)
             .lineWidth(2000)
@@ -102,7 +104,7 @@ public class TextWindow extends UIElement {
     @Override
     public void setPosition(Vector3d position, double direction) {
         super.setPosition(position, direction);
-        display.teleport(new Location(Debugger.WORLD, position.x, position.y, position.z));
+        display.teleport(new Location(WORLD, position.x, position.y, position.z));
         display.setRotation((float) direction - 180, 0);
     }
 

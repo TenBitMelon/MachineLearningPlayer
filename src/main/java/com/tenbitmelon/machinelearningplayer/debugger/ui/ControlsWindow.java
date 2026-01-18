@@ -19,15 +19,17 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.Iterator;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
+
 public class ControlsWindow extends UIElement {
 
-    final TextDisplay display = new TextDisplayBuilder(Debugger.WORLD)
+    final TextDisplay display = new TextDisplayBuilder(WORLD)
         .billboard(Display.Billboard.FIXED)
         .alignment(TextDisplay.TextAlignment.LEFT)
         .lineWidth(2000)
         .teleportDuration(1)
         .build();
-    final TextDisplay displayBack = new TextDisplayBuilder(Debugger.WORLD)
+    final TextDisplay displayBack = new TextDisplayBuilder(WORLD)
         .billboard(Display.Billboard.FIXED)
         .alignment(TextDisplay.TextAlignment.LEFT)
         .lineWidth(2000)
@@ -123,9 +125,9 @@ public class ControlsWindow extends UIElement {
     public void setPosition(Vector3d position, double direction) {
         super.setPosition(position, direction);
 
-        display.teleport(new Location(Debugger.WORLD, position.x, position.y, position.z));
+        display.teleport(new Location(WORLD, position.x, position.y, position.z));
         display.setRotation((float) direction - 180, 0);
-        displayBack.teleport(new Location(Debugger.WORLD, position.x, position.y, position.z));
+        displayBack.teleport(new Location(WORLD, position.x, position.y, position.z));
         displayBack.setRotation((float) direction - 180, 0);
 
         dirty = true;
