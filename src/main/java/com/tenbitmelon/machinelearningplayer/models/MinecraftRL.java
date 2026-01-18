@@ -309,7 +309,9 @@ public class MinecraftRL extends Module {
         /*
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
          */
-        Tensor newHiddenTensor = torch.flatten(torch.cat(newHidden), 0, 1);
+        Tensor cat = torch.cat(newHidden);
+        Tensor newHiddenTensor = torch.flatten(cat, 0, 1);
+        cat.close();
         for (int i = 0; i < newHidden.size(); i++) {
             newHidden.get(i).close();
         }
@@ -346,12 +348,13 @@ public class MinecraftRL extends Module {
         States states = this.getStates(observation, lstmState, done);
         Tensor hidden = states.newHiddenTensor;
 
-        states.close();
 
         /*
         return self.critic(hidden)
          */
-        return this.critic.forward(hidden);
+        Tensor forward = this.critic.forward(hidden);
+        states.close();
+        return forward;
     }
 
     public ActionAndValue getActionAndValue(Tensor nextObs, LSTMState nextLstmState, Tensor nextDone) {
@@ -389,13 +392,17 @@ public class MinecraftRL extends Module {
         rot_dist = Normal(rot_mean, rot_std)
          */
 
-        Tensor yawMean = this.yawMean.forward(hidden).squeeze(-1); // Shape (batch,)
+        Tensor yMeanForward = this.yawMean.forward(hidden);
+        Tensor yawMean = yMeanForward.squeeze(-1); // Shape (batch,)
         Tensor yawStd = torch.exp(this.yawLogSTD);
         Normal yawDist = new Normal(yawMean, yawStd);
+        yMeanForward.close();
 
-        Tensor pitchMean = this.pitchMean.forward(hidden).squeeze(-1); // Shape (batch,)
+        Tensor pitchMeanForward = this.pitchMean.forward(hidden);
+        Tensor pitchMean = pitchMeanForward.squeeze(-1); // Shape (batch,)
         Tensor pitchStd = torch.exp(this.pitchLogSTD);
         Normal pitchDist = new Normal(pitchMean, pitchStd);
+        pitchMeanForward.close();
 
         // Jump
 
@@ -444,24 +451,71 @@ public class MinecraftRL extends Module {
             attackUseItemAction = attackUseItemProbs.sample(); // LongTensor
 
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
-            action = torch.stack(new TensorVector(
-                jumpKeyAction.to(torch.ScalarType.Float),
-                sprintSneakKeysAction.to(torch.ScalarType.Float),
+            Tensor jumpFloat = jumpKeyAction.to(torch.ScalarType.Float);
+            Tensor sprintSneakFlaot = sprintSneakKeysAction.to(torch.ScalarType.Float);
+            Tensor forwardFloat = forwardMoveKeysAction.to(torch.ScalarType.Float);
+            Tensor strafingFloat = strafingMoveKeysAction.to(torch.ScalarType.Float);
+            Tensor useFloat = attackUseItemAction.to(torch.ScalarType.Float);
+            TensorVector tensorVector = new TensorVector(
+                jumpFloat,
+                sprintSneakFlaot,
                 yawAction,
                 pitchAction,
-                forwardMoveKeysAction.to(torch.ScalarType.Float),
-                strafingMoveKeysAction.to(torch.ScalarType.Float),
-                attackUseItemAction.to(torch.ScalarType.Float)
-            ), 1);
+                forwardFloat,
+                strafingFloat,
+                useFloat
+            );
+            action = torch.stack(tensorVector, 1);
+            jumpFloat.close();
+            sprintSneakFlaot.close();
+            forwardFloat.close();
+            strafingFloat.close();
+            useFloat.close();
+            tensorVector.close();
         } else {
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
-            jumpKeyAction = action.narrow(1, 0, 1).squeeze(1).to(torch.ScalarType.Long);
-            sprintSneakKeysAction = action.narrow(1, 1, 1).squeeze(1).to(torch.ScalarType.Long);
-            yawAction = action.narrow(1, 2, 1).squeeze(1).to(yawMean.dtype());
-            pitchAction = action.narrow(1, 3, 1).squeeze(1).to(pitchMean.dtype());
-            forwardMoveKeysAction = action.narrow(1, 4, 1).squeeze(1).to(torch.ScalarType.Long);
-            strafingMoveKeysAction = action.narrow(1, 5, 1).squeeze(1).to(torch.ScalarType.Long);
-            attackUseItemAction = action.narrow(1, 6, 1).squeeze(1).to(torch.ScalarType.Long);
+
+            Tensor jumpKeyNarrow = action.narrow(1, 0, 1);
+            Tensor jumpKeySqueeze = jumpKeyNarrow.squeeze(1);
+            jumpKeyAction = jumpKeySqueeze.to(torch.ScalarType.Long);
+            jumpKeyNarrow.close();
+            jumpKeySqueeze.close();
+
+            Tensor sprintSneakKeysNarrow = action.narrow(1, 1, 1);
+            Tensor sprintSneakKeysSqueeze = sprintSneakKeysNarrow.squeeze(1);
+            sprintSneakKeysAction = sprintSneakKeysSqueeze.to(torch.ScalarType.Long);
+            sprintSneakKeysNarrow.close();
+            sprintSneakKeysSqueeze.close();
+
+            Tensor yawNarrow = action.narrow(1, 2, 1);
+            Tensor yawSqueeze = yawNarrow.squeeze(1);
+            yawAction = yawSqueeze.to(yawMean.dtype());
+            yawNarrow.close();
+            yawSqueeze.close();
+
+            Tensor pitchNarrow = action.narrow(1, 3, 1);
+            Tensor pitchSqueeze = pitchNarrow.squeeze(1);
+            pitchAction = pitchSqueeze.to(pitchMean.dtype());
+            pitchNarrow.close();
+            pitchSqueeze.close();
+
+            Tensor forwardMoveKeysNarrow = action.narrow(1, 4, 1);
+            Tensor forwardMoveKeysSqueeze = forwardMoveKeysNarrow.squeeze(1);
+            forwardMoveKeysAction = forwardMoveKeysSqueeze.to(torch.ScalarType.Long);
+            forwardMoveKeysNarrow.close();
+            forwardMoveKeysSqueeze.close();
+
+            Tensor strafingMoveKeysNarrow = action.narrow(1, 5, 1);
+            Tensor strafingMoveKeysSqueeze = strafingMoveKeysNarrow.squeeze(1);
+            strafingMoveKeysAction = strafingMoveKeysSqueeze.to(torch.ScalarType.Long);
+            strafingMoveKeysNarrow.close();
+            strafingMoveKeysSqueeze.close();
+
+            Tensor attackUseItemNarrow = action.narrow(1, 6, 1);
+            Tensor attackUseItemSqueeze = attackUseItemNarrow.squeeze(1);
+            attackUseItemAction = attackUseItemSqueeze.to(torch.ScalarType.Long);
+            attackUseItemNarrow.close();
+            attackUseItemSqueeze.close();
         }
 
         /*
@@ -481,12 +535,12 @@ public class MinecraftRL extends Module {
         Tensor attackUseItemLogProbs = attackUseItemProbs.logProb(attackUseItemAction);
 
         Tensor totalLogProbs = forwardMoveKeysLogProbs
-            .add(strafingMoveKeysLogProbs)
-            .add(yawLogProbs)
-            .add(pitchLogProbs)
-            .add(jumpKeyLogProbs)
-            .add(sprintSneakKeysLogProbs)
-            .add(attackUseItemLogProbs);
+            .add_(strafingMoveKeysLogProbs)
+            .add_(yawLogProbs)
+            .add_(pitchLogProbs)
+            .add_(jumpKeyLogProbs)
+            .add_(sprintSneakKeysLogProbs)
+            .add_(attackUseItemLogProbs);
 
         /*
         entropy = x_probs.entropy() + y_probs.entropy() + rot_dist.entropy()
@@ -519,6 +573,14 @@ public class MinecraftRL extends Module {
          */
 
         Tensor value = this.critic.forward(hidden);
+
+        forwardMoveKeysProbs.close();
+        strafingMoveKeysProbs.close();
+        yawDist.close();
+        pitchDist.close();
+        jumpKeyProbs.close();
+        sprintSneakKeysProbs.close();
+        attackUseItemProbs.close();
 
         action.retainReference();
         totalLogProbs.retainReference();

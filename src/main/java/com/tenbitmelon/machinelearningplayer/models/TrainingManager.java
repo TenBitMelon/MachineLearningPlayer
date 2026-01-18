@@ -187,7 +187,9 @@ public class TrainingManager {
         if (resetResult == null) {
             LOGGER.info("Initial environment reset...");
             resetResult = environment.reset();
-            nextObs = resetResult.observationsTensor().to(device, torch.ScalarType.Float);
+            Tensor tensor = resetResult.observationsTensor();
+            nextObs = tensor.to(device, torch.ScalarType.Float);
+            tensor.close();
             resetResult.close();
         }
 
@@ -297,9 +299,13 @@ public class TrainingManager {
         nextLstmState.retainReference();
 
         try (Tensor slice = values.get(step)) {
-            try (Tensor flattened = actionResult.value().flatten()) {
-                slice.copy_(flattened);
-            }
+            Tensor value = actionResult.value();
+            Tensor flattened = value.flatten();
+
+            slice.copy_(flattened);
+
+            value.close();
+            flattened.close();
         }
 
         AutogradState.get_tls_state().set_grad_mode(true);
@@ -347,16 +353,24 @@ public class TrainingManager {
         VectorStepResult stepResult = environment.postTickStep();
 
         nextObs.close();
-        nextObs = stepResult.observationsTensor().to(device, torch.ScalarType.Float);
+        Tensor rawObs = stepResult.observationsTensor();
+        nextObs = rawObs.to(device, torch.ScalarType.Float);
         nextObs.retainReference();
+        rawObs.close();
 
         nextDone.close();
-        nextDone = Tensor.create(stepResult.logicalOrTerminationsAndTruncations()).to(device, torch.ScalarType.Float);
+        Tensor cpuLogicalOr = Tensor.create(stepResult.logicalOrTerminationsAndTruncations());
+        nextDone = cpuLogicalOr.to(device, torch.ScalarType.Float);
+        cpuLogicalOr.close();
         nextDone.retainReference();
 
-        Tensor newRewardsTensor = Tensor.create(stepResult.rewards()).to(device, torch.ScalarType.Float).view(-1);
+        Tensor cpuStepRewards = Tensor.create(stepResult.rewards());
+        Tensor gpuStepRewards = cpuStepRewards.to(device, torch.ScalarType.Float);
+        Tensor newRewardsTensor = gpuStepRewards.view(-1);
         rewards.get(step).copy_(newRewardsTensor);
         newRewardsTensor.close();
+        gpuStepRewards.close();
+        cpuStepRewards.close();
 
         // Moved theses parts onto the lines above
         // nextObs = torch.tensor(nextObs).to(device, torch.ScalarType.Float);
@@ -421,6 +435,8 @@ public class TrainingManager {
 
         Tensor lastGAELam = torch.zeros(new long[]{args.numEnvs}, new TensorOptions(device));
 
+        // TODO: Test whether pulling to the .cpu() and running java math is faster than doing it in torch
+
         for (int t = args.numSteps - 1; t >= 0; t--) {
             PointerScope loopScope = new PointerScope();
 
@@ -434,17 +450,27 @@ public class TrainingManager {
                 nextValues = values.get(t + 1);
             }
 
-            Tensor mul1 = nextValues.mul(nextNonTerminal).mul(SCALAR_GAMMA);
-            Tensor delta = rewards.get(t)
-                .add(mul1)
-                .sub(values.get(t));
+            Tensor mul11 = nextValues.mul(nextNonTerminal);
+            Tensor mul1 = mul11.mul(SCALAR_GAMMA);
+            Tensor add1 = rewards.get(t).add(mul1);
+            Tensor delta = add1.sub(values.get(t));
 
 
-            Tensor mul2 = nextNonTerminal.mul(SCALAR_GAMMA_GAE_LAMBDA).mul(lastGAELam);
+            Tensor mul22 = nextNonTerminal.mul(SCALAR_GAMMA_GAE_LAMBDA);
+            Tensor mul2 = mul22.mul(lastGAELam);
             Tensor advantage = delta.add(mul2);
 
             advantages.get(t).copy_(advantage);
             lastGAELam.copy_(advantage);
+
+            mul11.close();
+            mul1.close();
+            add1.close();
+            delta.close();
+            mul22.close();
+            mul2.close();
+            advantage.close();
+            nextNonTerminal.close();
 
             loopScope.close();
         }
@@ -522,8 +548,11 @@ public class TrainingManager {
             np.random.shuffle(envinds)
              */
             Tensor randperm = torch.randperm(args.numEnvs, new TensorOptions(device));
+            Tensor oldEnvIds = envinds;
             envinds = envinds.index_select(0, randperm);
             envinds.retainReference();
+            oldEnvIds.close();
+            randperm.close();
 
             /*
             for start in range(0, args.num_envs, envsperbatch):
@@ -570,8 +599,13 @@ public class TrainingManager {
                 ratio = logratio.exp()
                 */
 
-                Tensor logRatio = actionAndValueResult.totalLogProbs().sub(bLogProbs.index_select(0, mb_inds));
+                Tensor totalLogProbs = actionAndValueResult.totalLogProbs();
+                Tensor selected = bLogProbs.index_select(0, mb_inds);
+                Tensor logRatio = totalLogProbs.sub(selected);
                 Tensor ratio = logRatio.exp();
+
+                totalLogProbs.close();
+                selected.close();
 
                 /*
                 with torch.no_grad():
@@ -584,10 +618,22 @@ public class TrainingManager {
                 AutogradState.get_tls_state().set_grad_mode(false); // with torch.no_grad():
 
                 oldApproxKl = logRatio.neg().mean();
-                approxKl = ratio.sub(SCALAR_ONE).sub_(logRatio).mean();
-                Tensor clipFracTensor = ratio.sub(SCALAR_ONE).abs_().gt_(SCALAR_CLIP_COEF).to(torch.ScalarType.Float).mean();
+                Tensor ratioSub = ratio.sub(SCALAR_ONE);
+                Tensor subLogRa = ratioSub.sub(logRatio);
+                approxKl = subLogRa.mean();
+                Tensor subAbs = ratioSub.abs();
+                Tensor subAbsGT = subAbs.gt(SCALAR_CLIP_COEF);
+                Tensor toFloat = subAbsGT.to(torch.ScalarType.Float);
+                Tensor clipFracTensor = toFloat.mean();
                 clipFracs.add_(clipFracTensor);
                 numClipFracs++;
+
+                ratioSub.close();
+                subLogRa.close();
+                subAbs.close();
+                subAbsGT.close();
+                toFloat.close();
+                clipFracTensor.close();
 
                 AutogradState.get_tls_state().set_grad_mode(true);
 
@@ -691,7 +737,18 @@ public class TrainingManager {
                 optimizer.step();
 
                 actionAndValueResult.close();
-                
+                mbenvinds.close();
+                mb_inds.close();
+                logRatio.close();
+                ratio.close();
+                pgLoss1.close();
+                pgLoss2.close();
+                newvalue.close();
+                bReturnsMbInds.close();
+                bValueMbInds.close();
+                loss.close();
+
+
                 vLoss.retainReference();
                 pgLoss.retainReference();
                 entropyLoss.retainReference();
@@ -720,10 +777,26 @@ public class TrainingManager {
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
          */
-        Tensor yPred = bValues.cpu();
-        Tensor yTrue = bReturns.cpu();
-        double varY = yTrue.var().item().toDouble();
-        double explainedVar = varY == 0 ? Double.NaN : 1.0 - yTrue.sub(yPred).var().div(new Scalar(varY)).item().toDouble();
+        // Tensor yPred = bValues.cpu();
+        // Tensor yTrue = bReturns.cpu();
+        // double varY = yTrue.var().item().toDouble();
+        // double explainedVar;
+        // if (varY == 0) {
+        //     explainedVar = Double.NaN;
+        // } else {
+        //     Scalar scalar = new Scalar(varY);
+        //     Tensor sub = yTrue.sub(yPred);
+        //     Tensor var = sub.var();
+        //     Tensor div = var.div(scalar);
+        //     Scalar item = div.item();
+        //     explainedVar = 1.0 - item.toDouble();
+        //
+        //     scalar.close();
+        //     sub.close();
+        //     var.close();
+        //     div.close();
+        //     item.close();
+        // }
 
         LOGGER.info("==================== Finished Epoch for Iteration:      {} ====================", iteration - 1);
 
@@ -768,7 +841,8 @@ public class TrainingManager {
                 oldApproxKlVal,
                 approxKlVal,
                 clipfrac,
-                explainedVar,
+                // explainedVar,
+                0,
                 iterationTime,
                 sps,
                 numTerminations,
@@ -788,7 +862,8 @@ public class TrainingManager {
                 oldApproxKlVal,
                 approxKlVal,
                 clipfrac,
-                explainedVar,
+                // explainedVar,
+                0,
                 iterationTime,
                 sps,
                 averageRewards,
@@ -798,7 +873,14 @@ public class TrainingManager {
             LOGGER.error("Failed to log training metrics: {}", e.getMessage());
         }
         LOGGER.memory();
+
         clipFracs.close();
+        returns.close();
+        bObs.close();
+        bLogProbs.close();
+        // yPred.close();
+        // yTrue.close();
+
         scope.close();
 
         iteration++;
@@ -806,6 +888,11 @@ public class TrainingManager {
         if (iteration % 100 == 0) {
             // allocator.snapshot();
             model.saveCheckpoint(iteration);
+        }
+
+        if (iteration % 500 == 0) {
+            LOGGER.info("Cleaning up native memory...");
+            System.gc();
         }
     }
 

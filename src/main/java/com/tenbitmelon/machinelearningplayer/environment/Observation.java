@@ -140,10 +140,7 @@ public class Observation implements AutoCloseable {
 
     @Override
     public void close() {
-        data.releaseReference();
+        data.close();
     }
 
-    public void retainReference() {
-        data.retainReference();
-    }
 }

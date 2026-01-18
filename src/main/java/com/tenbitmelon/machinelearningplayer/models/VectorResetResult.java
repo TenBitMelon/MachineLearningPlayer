@@ -12,7 +12,9 @@ public record VectorResetResult(Observation[] observations) implements AutoClose
             Tensor tensor = observation.tensor();
             tensorVector.push_back(tensor);
         }
-        return torch.stack(tensorVector, 0);  // Stack along batch dimension
+        Tensor stack = torch.stack(tensorVector, 0);
+        tensorVector.close();
+        return stack;  // Stack along batch dimension
     }
 
     @Override

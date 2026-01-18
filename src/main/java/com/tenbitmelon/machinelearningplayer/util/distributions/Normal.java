@@ -4,7 +4,7 @@ import org.bytedeco.pytorch.Scalar;
 import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.global.torch;
 
-public class Normal {
+public class Normal implements AutoCloseable {
     //     Args:
     //         loc (float or Tensor): mean of the distribution (often referred to as mu)
     //         scale (float or Tensor): standard deviation of the distribution
@@ -71,5 +71,11 @@ public class Normal {
 
     public Tensor entropy() {
         return torch.log(scale).add(new Scalar(0.5)).add(new Scalar(0.5 * Math.log(2 * Math.PI)));
+    }
+
+    @Override
+    public void close() {
+        loc.close();
+        scale.close();
     }
 }

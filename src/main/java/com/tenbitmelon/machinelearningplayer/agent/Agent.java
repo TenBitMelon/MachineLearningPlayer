@@ -208,11 +208,9 @@ public class Agent extends ServerPlayer {
 
     @Override
     public void die(DamageSource cause) {
-        shakeOff();
         super.die(cause);
-        setHealth(20);
-        this.foodData = new FoodData();
-        kill(this.getCombatTracker().getDeathMessage());
+
+        setHealth(0.0f);
     }
 
     @Override
@@ -251,6 +249,7 @@ public class Agent extends ServerPlayer {
     }
 
     public void reset(Vec3 location) {
+        this.connection.handleClientCommand(new ServerboundClientCommandPacket(ServerboundClientCommandPacket.Action.PERFORM_RESPAWN));
         this.reset();
         this.actionPack.stopAll();
 
@@ -262,7 +261,4 @@ public class Agent extends ServerPlayer {
         this.snapTo(location.x(), location.y(), location.z(), yRot, xRot);
     }
 
-    public float getAttackStrengthTicker() {
-        return this.attackStrengthTicker;
-    }
 }

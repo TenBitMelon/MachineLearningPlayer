@@ -5,7 +5,7 @@ import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.global.torch;
 import org.bytedeco.pytorch.kNone;
 
-public class Bernoulli {
+public class Bernoulli implements AutoCloseable {
 
     private final Tensor logits;
     private final Tensor probs;
@@ -47,5 +47,11 @@ public class Bernoulli {
         BCEWithLogitsLossOptions bceWithLogitsLossOptions = new BCEWithLogitsLossOptions();
         bceWithLogitsLossOptions.reduction().put(new kNone());
         return torch.binary_cross_entropy_with_logits(logits, probs, bceWithLogitsLossOptions);
+    }
+
+    @Override
+    public void close() {
+        logits.close();
+        probs.close();
     }
 }

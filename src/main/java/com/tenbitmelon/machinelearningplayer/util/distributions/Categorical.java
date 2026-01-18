@@ -6,7 +6,7 @@ import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
-public class Categorical {
+public class Categorical implements AutoCloseable {
 
     private final Tensor logits;
     private final Tensor probs;
@@ -75,6 +75,12 @@ public class Categorical {
     public Tensor entropy() {
         Tensor pLogP = this.logits.mul(this.probs);
         return pLogP.sum(-1).neg();
+    }
+
+    public void close() {
+        this.logits.close();
+        this.probs.close();
+        this.batchSize.close();
     }
 }
 

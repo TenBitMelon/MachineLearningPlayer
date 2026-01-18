@@ -100,7 +100,7 @@ public class MachineLearningCommand {
             .then(Commands.literal("productionRun").executes(ctx -> {
                 CommandSender sender = ctx.getSource().getSender();
                 sender.sendPlainMessage("Starting production run...");
-                Bukkit.dispatchCommand(sender, "ml uiupdates");
+                UIElement.ALLOW_UPDATES = false;
                 Bukkit.dispatchCommand(sender, "ml clearUiCallbacks");
                 Bukkit.dispatchCommand(sender, "ml removeDisplays");
                 TrainingManager.sprint = true;

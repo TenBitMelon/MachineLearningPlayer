@@ -41,6 +41,7 @@ public class MinecraftEnvironment {
     private int currentStep = 0;
     private float lastKnownTargetHealth = 0.0f;
     private float lastKnownMyHealth = 0.0f;
+    private float lastKnownDistanceToTarget = 0.0f;
 
     public MinecraftEnvironment(ExperimentConfig args) {
         this.args = args;
@@ -130,6 +131,56 @@ public class MinecraftEnvironment {
                 }
             }
         }
+
+        /*
+        // Generate random slope parameters
+        double slopeAngle = Math.random() * Math.PI * 2; // Random direction (0 to 2π)
+        double slopeGradient = 0.1 + Math.random() * 0.3; // Random steepness (0.1 to 0.4 blocks per block)
+
+        // Calculate slope direction vector
+        double slopeDx = Math.cos(slopeAngle);
+        double slopeDz = Math.sin(slopeAngle);
+
+        // Then modify your floor-building loop:
+        for (int offsetX = 0; offsetX < 16; offsetX++) {
+            for (int offsetZ = 0; offsetZ < 16; offsetZ++) {
+                int worldX = startX + offsetX;
+                int worldZ = startZ + offsetZ;
+
+                // Calculate distance along slope direction from center
+                double relativeX = offsetX - 8.0;
+                double relativeZ = offsetZ - 8.0;
+                double distanceAlongSlope = (relativeX * slopeDx + relativeZ * slopeDz);
+
+                // Calculate height based on slope
+                int baseY = (int) Math.round(distanceAlongSlope * slopeGradient);
+
+                // Clear above and fill below the sloped surface
+                for (int y = -16; y < 64; y++) {
+                    if (y < baseY) {
+                        // Fill below with barrier or solid block
+                        WORLD.getBlockAt(worldX, y, worldZ).setType(Material.BARRIER);
+                    } else if (y == baseY) {
+                        // This is the surface - apply your checkerboard pattern
+                        if (offsetX >= 1 && offsetX <= 14 && offsetZ >= 1 && offsetZ <= 14) {
+                            int gridX = (offsetX - 1) / 2;
+                            int gridZ = (offsetZ - 1) / 2;
+                            boolean isConcreteSquare = (gridX + gridZ) % 2 == 0;
+
+                            WORLD.getBlockAt(worldX, y, worldZ).setType(
+                                isConcreteSquare ? randomConcrete : randomWool
+                            );
+                        } else {
+                            WORLD.getBlockAt(worldX, y, worldZ).setType(Material.BARRIER);
+                        }
+                    } else {
+                        // Clear air above
+                        WORLD.getBlockAt(worldX, y, worldZ).setType(Material.AIR);
+                    }
+                }
+            }
+        }
+         */
 
         double[] randomPointInCircle = getRandomPointInCircle(2, 8);
         Location agentLocation = new Location(WORLD, centerPosition.x + randomPointInCircle[0], 0, centerPosition.z + randomPointInCircle[1]);
@@ -242,6 +293,7 @@ public class MinecraftEnvironment {
         // Assuming that when I get reset, the target is also reset and at full health
         lastKnownTargetHealth = targetEntity.getMaxHealth();
         lastKnownMyHealth = agent.getMaxHealth();
+        lastKnownDistanceToTarget = 0.0f;
 
         return new ResetResult(getObservation());
     }
@@ -295,6 +347,8 @@ public class MinecraftEnvironment {
         } else if (attackUse == 2) {
             agent.actionPack.start(EntityPlayerActionPack.ActionType.USE, EntityPlayerActionPack.Action.once());
         }
+
+        action.close();
     }
 
     public StepResult postTickStep() {
@@ -307,18 +361,21 @@ public class MinecraftEnvironment {
         float damageDealt = lastKnownTargetHealth - targetHealth;
         lastKnownTargetHealth = targetHealth;
 
+        double distanceTo = agent.position().distanceTo(targetEntity.position());
+        if (lastKnownDistanceToTarget == 0.0f) {
+            lastKnownDistanceToTarget = (float) distanceTo;
+        }
+        float deltaDistance = lastKnownDistanceToTarget - (float) distanceTo;
+        lastKnownDistanceToTarget = (float) distanceTo;
+
         boolean terminated = false;
         float reward = 0.0f;
 
         reward += 0.05f * damageDealt;
-        reward += -0.05f * damageTaken;
-        reward += -0.001f; // timestep cost
+        reward += -0.02f * damageTaken;
+        // reward += -0.001f; // timestep cost
 
-        if (myHealth > 0 && targetHealth > 0) {
-            // BATTLE CONTINUES
-            // reward = 0.01f;
-            terminated = false;
-        } else if (myHealth <= 0 && targetHealth > 0) {
+        if (myHealth <= 0 && targetHealth > 0) {
             // I LOST (I died, other is still up)
             reward += -10.0f;
             terminated = true;
@@ -332,6 +389,12 @@ public class MinecraftEnvironment {
             terminated = true;
         }
 
+        if (distanceTo < 3.0f) {
+            reward += 0.001f; // small reward for being close to the target
+        }
+        if (distanceTo > 1.5f) {
+            reward += deltaDistance * 0.001f;
+        }
 
         boolean truncated = this.currentStep > this.args.numSteps;
 
@@ -350,13 +413,6 @@ public class MinecraftEnvironment {
         return new StepResult(observation, reward, terminated, truncated);
     }
 
-    private double getDistanceToCenter(Entity targetAgent) {
-        Vec3 pos = targetAgent.position();
-        return Math.sqrt(
-            Math.pow(pos.x - centerPosition.x, 2) +
-                Math.pow(pos.z - centerPosition.z, 2)
-        );
-    }
 
     public boolean isReady() {
         return agent != null && agent.isReady();

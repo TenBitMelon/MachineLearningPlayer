@@ -90,7 +90,7 @@ public class Action implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
         data.close();
         cachedData.close();
     }
