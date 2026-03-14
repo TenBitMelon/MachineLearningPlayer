@@ -33,8 +33,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.*;
 
 @SuppressWarnings("UnstableApiUsage")
 public class MachineLearningCommand {
@@ -159,6 +158,16 @@ public class MachineLearningCommand {
             .then(Commands.literal("resetEvalStats").executes(ctx -> {
                 EvaluationManager.resetEvaluationMetrics();
                 ctx.getSource().getSender().sendPlainMessage("Evaluation metrics reset.");
+                return Command.SINGLE_SUCCESS;
+            }))
+            .then(Commands.literal("resetAllEnvironments").executes(ctx -> {
+                if (CURRENT_MODE == MachineLearningPlayer.Mode.EVALUATION) {
+                    EvaluationManager.getEnvironment().reset();
+                    ctx.getSource().getSender().sendPlainMessage("All evaluation environments reset.");
+                } else {
+                    TrainingManager.reset();
+                    ctx.getSource().getSender().sendPlainMessage("All training environments reset.");
+                }
                 return Command.SINGLE_SUCCESS;
             }))
             .then(logLevels())

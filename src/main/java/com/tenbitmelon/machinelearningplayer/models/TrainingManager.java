@@ -914,6 +914,10 @@ public class TrainingManager {
         }
     }
 
+    public static void reset() {
+        environment.reset();
+    }
+
     public static int createCheckpoint() {
         model.saveCheckpoint(iteration);
         return iteration;

@@ -3,30 +3,26 @@ package com.tenbitmelon.machinelearningplayer.environment;
 import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.TextWindow;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
-import com.tenbitmelon.machinelearningplayer.util.BlockDisplayBuilder;
+import net.kyori.adventure.text.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.*;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
-import org.bukkit.entity.Display;
-import org.bukkit.entity.TextDisplay;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bytedeco.pytorch.Tensor;
-import org.joml.Vector3d;
 
 import java.util.concurrent.CompletableFuture;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.szudzikUnpairing;
+import static com.tenbitmelon.machinelearningplayer.util.Utils.*;
 
 public class MinecraftEnvironment {
 
@@ -43,38 +39,59 @@ public class MinecraftEnvironment {
     private float lastKnownMyHealth = 0.0f;
     private float lastKnownDistanceToTarget = 0.0f;
 
+    private int[][] heightMap = new int[32][32];
+
     public MinecraftEnvironment(ExperimentConfig args) {
         this.args = args;
         this.environmentId = nextEnvironmentId++;
 
         int[] coords = szudzikUnpairing(this.environmentId / 2);
-        // Location roomLocation = new Location(WORLD, coords[0] * 16 + 16, 0, coords[1] * 16 + 16);
 
-        // environmentLog = new TextWindow(Display.Billboard.VERTICAL, TextDisplay.TextAlignment.LEFT);
-        // Vector3d logpos = roomLocation.toVector().toVector3d().mul(1, 0, 1);
-        // if (this.environmentId % 2 == 0) logpos.add(5.0f, 4.0f, 5.0f);
-        // else logpos.add(11.0f, 4.0f, 11.0f);
-        // environmentLog.setPosition(logpos);
+        generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 1);
+        generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 1);
+        generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 2);
+        generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 2);
 
-        Chunk chunk = WORLD.getChunkAt(coords[0] + 1, coords[1] + 1);
-        chunk.load();
-        chunk.setForceLoaded(true);
+        double centerX = (coords[0] * 2 + 2) * 16.0;
+        double centerZ = (coords[1] * 2 + 2) * 16.0;
 
-        int startX = chunk.getX() * 16;
-        int startZ = chunk.getZ() * 16;
-
-        double centerX = startX + 8.0;
-        double centerZ = startZ + 8.0;
         this.centerPosition = new Vec3(centerX, 0.0, centerZ);
 
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                for (int y = -16; y < 64; y++) {
-                    WORLD.getBlockAt(startX + x, y, startZ + z).setType(Material.AIR);
-                }
-                WORLD.getBlockAt(startX + x, -1, startZ + z).setType(Material.BARRIER);
-            }
+        Location agentLocation;
+        if (this.environmentId % 2 == 0) {
+            agentLocation = new Location(WORLD, centerPosition.x - 3.0, 0, centerPosition.z - 7.0);
+        } else {
+            agentLocation = new Location(WORLD, centerPosition.x + 3.0, 0, centerPosition.z - 7.0);
         }
+
+        MinecraftServer server = ((CraftServer) Bukkit.getServer()).getServer();
+        CompletableFuture<Agent> completableFuture = Agent.spawn(server, agentLocation);
+        completableFuture.whenComplete((agent, throwable) -> {
+            if (throwable == null) {
+                this.agent = agent;
+                this.reset();
+            }
+        });
+    }
+
+    public static double[] getRandomPointInCircle(double minDist, double maxDist) {
+        if (minDist < 0 || maxDist <= minDist) {
+            throw new IllegalArgumentException("Invalid min/max distance");
+        }
+
+        // Uniform distribution over the area
+        double angle = Math.random() * 2 * Math.PI;
+        double radius = Math.sqrt(Math.random() * (maxDist * maxDist - minDist * minDist) + minDist * minDist);
+
+        double x = radius * Math.cos(angle);
+        double y = radius * Math.sin(angle);
+        return new double[]{x, y};
+    }
+
+    public void generateFloorForChunk(int chunkX, int xChunkOffset, int chunkZ, int zChunkOffset) {
+        Chunk chunk = WORLD.getChunkAt(chunkX + xChunkOffset, chunkZ + zChunkOffset);
+        chunk.load();
+        chunk.setForceLoaded(true);
 
         int i = (int) (Math.random() * 15);
         Material randomConcrete = new Material[]{
@@ -112,35 +129,21 @@ public class MinecraftEnvironment {
             Material.RED_WOOL
         }[i];
 
-        for (int offsetX = 0; offsetX < 16; offsetX++) {
-            for (int offsetZ = 0; offsetZ < 16; offsetZ++) {
+        int startX = chunk.getX() * 16;
+        int startZ = chunk.getZ() * 16;
 
-                int worldX = startX + offsetX;
-                int worldZ = startZ + offsetZ;
+        int currChunkId = szudzikPairing(chunk.getX(), chunk.getZ());
+        int posXChunkId = szudzikPairing(chunk.getX() + 1, chunk.getZ());
+        int posZChunkId = szudzikPairing(chunk.getX(), chunk.getZ() + 1);
+        int posXZChunkId = szudzikPairing(chunk.getX() + 1, chunk.getZ() + 1);
+        int salt = Bukkit.getCurrentTick();
 
-                // Checker grid pattern (2x2 squares)
-                if (offsetX >= 1 && offsetX <= 14 && offsetZ >= 1 && offsetZ <= 14) {
-                    int gridX = (offsetX - 1) / 2;
-                    int gridZ = (offsetZ - 1) / 2;
-                    boolean isConcreteSquare = (gridX + gridZ) % 2 == 0;
+        double heightA = hashInt(currChunkId + salt) * 8;
+        double heightB = hashInt(posXChunkId + salt) * 8;
+        double heightC = hashInt(posZChunkId + salt) * 8;
+        double heightD = hashInt(posXZChunkId + salt) * 8;
 
-                    if (isConcreteSquare) {
-                        WORLD.getBlockAt(worldX, -1, worldZ).setType(randomConcrete);
-                    } else {
-                        WORLD.getBlockAt(worldX, -1, worldZ).setType(randomWool);
-                    }
-                }
-            }
-        }
-
-        /*
-        // Generate random slope parameters
-        double slopeAngle = Math.random() * Math.PI * 2; // Random direction (0 to 2π)
-        double slopeGradient = 0.1 + Math.random() * 0.3; // Random steepness (0.1 to 0.4 blocks per block)
-
-        // Calculate slope direction vector
-        double slopeDx = Math.cos(slopeAngle);
-        double slopeDz = Math.sin(slopeAngle);
+        double area = 128.0;
 
         // Then modify your floor-building loop:
         for (int offsetX = 0; offsetX < 16; offsetX++) {
@@ -148,13 +151,37 @@ public class MinecraftEnvironment {
                 int worldX = startX + offsetX;
                 int worldZ = startZ + offsetZ;
 
-                // Calculate distance along slope direction from center
-                double relativeX = offsetX - 8.0;
-                double relativeZ = offsetZ - 8.0;
-                double distanceAlongSlope = (relativeX * slopeDx + relativeZ * slopeDz);
+                int baseY;
 
-                // Calculate height based on slope
-                int baseY = (int) Math.round(distanceAlongSlope * slopeGradient);
+                if (offsetX + offsetZ >= 16) {
+                    // BDC side
+                    double areaBPD = 16.0 * (16 - offsetX) / 2.0;
+                    double areaPCD = 16.0 * (16 - offsetZ) / 2.0;
+                    double areaBCP = area - areaBPD - areaPCD;
+
+                    double barycentricB = areaPCD / area;
+                    double barycentricD = areaBCP / area;
+                    double barycentricC = areaBPD / area;
+
+                    double heightAtP = barycentricB * heightB + barycentricD * heightD + barycentricC * heightC;
+                    baseY = (int) Math.round(heightAtP);
+                } else {
+                    // ABC side
+                    double areaAPB = offsetZ * 16.0 / 2.0;
+                    double areaACP = offsetX * 16.0 / 2.0;
+                    double areaPCB = area - areaAPB - areaACP;
+
+                    double barycentricA = areaPCB / area;
+                    double barycentricB = areaACP / area;
+                    double barycentricC = areaAPB / area;
+
+
+                    double heightAtP = barycentricA * heightA + barycentricB * heightB + barycentricC * heightC;
+                    baseY = (int) Math.round(heightAtP);
+                }
+
+                // Set in the height map
+                heightMap[(xChunkOffset - 1) * 16 + offsetX][(zChunkOffset - 1) * 16 + offsetZ] = baseY;
 
                 // Clear above and fill below the sloped surface
                 for (int y = -16; y < 64; y++) {
@@ -163,17 +190,13 @@ public class MinecraftEnvironment {
                         WORLD.getBlockAt(worldX, y, worldZ).setType(Material.BARRIER);
                     } else if (y == baseY) {
                         // This is the surface - apply your checkerboard pattern
-                        if (offsetX >= 1 && offsetX <= 14 && offsetZ >= 1 && offsetZ <= 14) {
-                            int gridX = (offsetX - 1) / 2;
-                            int gridZ = (offsetZ - 1) / 2;
-                            boolean isConcreteSquare = (gridX + gridZ) % 2 == 0;
+                        int gridX = offsetX / 2;
+                        int gridZ = offsetZ / 2;
+                        boolean isConcreteSquare = (gridX + gridZ) % 2 == 0;
 
-                            WORLD.getBlockAt(worldX, y, worldZ).setType(
-                                isConcreteSquare ? randomConcrete : randomWool
-                            );
-                        } else {
-                            WORLD.getBlockAt(worldX, y, worldZ).setType(Material.BARRIER);
-                        }
+                        WORLD.getBlockAt(worldX, y, worldZ).setType(
+                            isConcreteSquare ? randomConcrete : randomWool
+                        );
                     } else {
                         // Clear air above
                         WORLD.getBlockAt(worldX, y, worldZ).setType(Material.AIR);
@@ -181,38 +204,6 @@ public class MinecraftEnvironment {
                 }
             }
         }
-         */
-
-        double[] randomPointInCircle = getRandomPointInCircle(2, 8);
-        Location agentLocation = new Location(WORLD, centerPosition.x + randomPointInCircle[0], 0, centerPosition.z + randomPointInCircle[1]);
-        if (this.environmentId % 2 == 0) {
-            agentLocation = new Location(WORLD, centerPosition.x - 3.0, 0, centerPosition.z - 7.0);
-        } else {
-            agentLocation = new Location(WORLD, centerPosition.x + 3.0, 0, centerPosition.z - 7.0);
-        }
-
-        MinecraftServer server = ((CraftServer) Bukkit.getServer()).getServer();
-        CompletableFuture<Agent> completableFuture = Agent.spawn(server, agentLocation);
-        completableFuture.whenComplete((agent, throwable) -> {
-            if (throwable == null) {
-                this.agent = agent;
-                this.reset();
-            }
-        });
-    }
-
-    public static double[] getRandomPointInCircle(double minDist, double maxDist) {
-        if (minDist < 0 || maxDist <= minDist) {
-            throw new IllegalArgumentException("Invalid min/max distance");
-        }
-
-        // Uniform distribution over the area
-        double angle = Math.random() * 2 * Math.PI;
-        double radius = Math.sqrt(Math.random() * (maxDist * maxDist - minDist * minDist) + minDist * minDist);
-
-        double x = radius * Math.cos(angle);
-        double y = radius * Math.sin(angle);
-        return new double[]{x, y};
     }
 
     public void setTarget(LivingEntity target) {
@@ -269,6 +260,12 @@ public class MinecraftEnvironment {
     public ResetResult reset() {
         this.currentStep = 0;
 
+        int[] coords = szudzikUnpairing(this.environmentId / 2);
+        generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 1);
+        generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 1);
+        generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 2);
+        generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 2);
+
         double minRadius = 1.0;
         double maxRadius = 1.0;
 
@@ -289,6 +286,14 @@ public class MinecraftEnvironment {
         agent.getInventory().setSelectedSlot(0);
         ItemStack itemStack = Material.WOODEN_SWORD.asItemType().createItemStack();
         agent.setItemInHand(InteractionHand.MAIN_HAND, ((CraftItemStack) itemStack).handle);
+        itemStack = Material.SHIELD.asItemType().createItemStack();
+        agent.setItemInHand(InteractionHand.OFF_HAND, ((CraftItemStack) itemStack).handle);
+        itemStack = Material.BOW.asItemType().createItemStack();
+        itemStack.addEnchantment(Enchantment.INFINITY, 1);
+        agent.getInventory().add(((CraftItemStack) itemStack).handle);
+        itemStack = Material.ARROW.asItemType().createItemStack();
+        itemStack.setAmount(1);
+        agent.getInventory().add(((CraftItemStack) itemStack).handle);
 
         // Assuming that when I get reset, the target is also reset and at full health
         lastKnownTargetHealth = targetEntity.getMaxHealth();
