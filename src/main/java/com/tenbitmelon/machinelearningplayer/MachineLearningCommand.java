@@ -42,9 +42,19 @@ public class MachineLearningCommand {
     public static LiteralCommandNode<CommandSourceStack> register(MachineLearningPlayer plugin) {
         LiteralArgumentBuilder<CommandSourceStack> commandBuilder = Commands.literal("ml")
             .executes(ctx -> {
-                ctx.getSource().getSender().sendPlainMessage("[STATS]");
+                CommandSender sender = ctx.getSource().getSender();
+                sender.sendPlainMessage("Mode: " + CURRENT_MODE);
+                sender.sendPlainMessage(TrainingManager.getTrainingSummary());
+                sender.sendPlainMessage(EvaluationManager.getDetailedEvaluationSummary());
                 return Command.SINGLE_SUCCESS;
             })
+            .then(Commands.literal("stats").executes(ctx -> {
+                CommandSender sender = ctx.getSource().getSender();
+                sender.sendPlainMessage("Mode: " + CURRENT_MODE);
+                sender.sendPlainMessage(TrainingManager.getTrainingSummary());
+                sender.sendPlainMessage(EvaluationManager.getDetailedEvaluationSummary());
+                return Command.SINGLE_SUCCESS;
+            }))
             .then(Commands.literal("sprint").executes(ctx -> {
                 TrainingManager.sprint = !TrainingManager.sprint;
                 ctx.getSource().getSender().sendPlainMessage("Sprint mode " + (TrainingManager.sprint ? "enabled" : "disabled"));
@@ -142,6 +152,15 @@ public class MachineLearningCommand {
                 }
                 return Command.SINGLE_SUCCESS;
             })))
+            .then(Commands.literal("evalSummary").executes(ctx -> {
+                ctx.getSource().getSender().sendPlainMessage(EvaluationManager.getDetailedEvaluationSummary());
+                return Command.SINGLE_SUCCESS;
+            }))
+            .then(Commands.literal("resetEvalStats").executes(ctx -> {
+                EvaluationManager.resetEvaluationMetrics();
+                ctx.getSource().getSender().sendPlainMessage("Evaluation metrics reset.");
+                return Command.SINGLE_SUCCESS;
+            }))
             .then(logLevels())
             .then(args());
 

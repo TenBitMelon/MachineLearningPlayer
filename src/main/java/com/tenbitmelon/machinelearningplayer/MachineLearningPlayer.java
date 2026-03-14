@@ -102,6 +102,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         new BukkitRunnable() {
             @Override
             public void run() {
+                // TODO: Run the models every-other tick instead of every tick
                 Debugger.update();
                 EvaluationManager.evaluationStep();
                 TrainingManager.trainingStep();
@@ -173,6 +174,10 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
             } else {
                 entity.remove();
             }
+        }
+
+        for (Chunk forceLoadedChunk : world.getForceLoadedChunks()) {
+            forceLoadedChunk.setForceLoaded(false);
         }
     }
 

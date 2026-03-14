@@ -58,6 +58,7 @@ public class MinecraftEnvironment {
 
         Chunk chunk = WORLD.getChunkAt(coords[0] + 1, coords[1] + 1);
         chunk.load();
+        chunk.setForceLoaded(true);
 
         int startX = chunk.getX() * 16;
         int startZ = chunk.getZ() * 16;
@@ -266,7 +267,6 @@ public class MinecraftEnvironment {
     }
 
     public ResetResult reset() {
-        // environmentLog.clearLines();
         this.currentStep = 0;
 
         double minRadius = 1.0;
@@ -373,7 +373,7 @@ public class MinecraftEnvironment {
 
         reward += 0.05f * damageDealt;
         reward += -0.02f * damageTaken;
-        // reward += -0.001f; // timestep cost
+        reward += -0.001f; // timestep cost
 
         if (myHealth <= 0 && targetHealth > 0) {
             // I LOST (I died, other is still up)
@@ -410,7 +410,17 @@ public class MinecraftEnvironment {
 
         Observation observation = getObservation();
 
-        return new StepResult(observation, reward, terminated, truncated);
+        return new StepResult(
+            observation,
+            reward,
+            terminated,
+            truncated,
+            myHealth,
+            targetHealth,
+            damageTaken,
+            damageDealt,
+            distanceTo
+        );
     }
 
 

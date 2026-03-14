@@ -82,6 +82,14 @@ public class TrainingManager {
     private static boolean needsPostTickStep = false;
     private static int numTerminations = 0;
     private static int numTruncations = 0;
+    private static double lastValueLoss = 0.0;
+    private static double lastPolicyLoss = 0.0;
+    private static double lastApproxKl = 0.0;
+    private static double lastClipFrac = 0.0;
+    private static double lastIterationTime = 0.0;
+    private static double lastSps = 0.0;
+    private static double lastAverageRewards = 0.0;
+    private static double lastTotalRewards = 0.0;
 
     public static void setup() {
 
@@ -137,6 +145,7 @@ public class TrainingManager {
         Debugger.mainDebugWindow.addControl(new BooleanControl(Component.text("Sprint"), () -> sprint, (value) -> sprint = value));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Iteration"), () -> iteration));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Step"), () -> step));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Summary"), TrainingManager::getTrainingSummary));
         Debugger.mainDebugWindow.addText("");
         Debugger.mainDebugWindow.addText("Arguments:");
         // args
@@ -832,6 +841,15 @@ public class TrainingManager {
             double averageRewards = rewards.mean().item().toDouble();
             double totalRewards = rewards.sum().item().toDouble();
 
+            lastValueLoss = valueLoss;
+            lastPolicyLoss = policyLoss;
+            lastApproxKl = approxKlVal;
+            lastClipFrac = clipfrac;
+            lastIterationTime = iterationTime;
+            lastSps = sps;
+            lastAverageRewards = averageRewards;
+            lastTotalRewards = totalRewards;
+
             trainingLogger.logStep(
                 iteration,
                 learningRate,
@@ -899,5 +917,23 @@ public class TrainingManager {
     public static int createCheckpoint() {
         model.saveCheckpoint(iteration);
         return iteration;
+    }
+
+    public static String getTrainingSummary() {
+        return String.format(
+            "Train: iter=%d step=%d running=%s ready=%s avgR=%.2f totalR=%.2f vLoss=%.4f pLoss=%.4f kl=%.4f clip=%.4f sps=%.1f, lastIterTime=%.2fs",
+            iteration,
+            step,
+            runTraining,
+            environment != null && environment.isReady(),
+            lastAverageRewards,
+            lastTotalRewards,
+            lastValueLoss,
+            lastPolicyLoss,
+            lastApproxKl,
+            lastClipFrac,
+            lastSps,
+            lastIterationTime
+        );
     }
 }

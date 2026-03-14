@@ -6,16 +6,28 @@ import com.tenbitmelon.machinelearningplayer.debugger.SystemStats;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.*;
 import com.tenbitmelon.machinelearningplayer.environment.*;
 import net.kyori.adventure.text.Component;
+import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.entity.CraftEntity;
+import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Mob;
+import org.bukkit.event.player.PlayerGameModeChangeEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bytedeco.javacpp.PointerScope;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.cuda.DeviceStats;
@@ -25,6 +37,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.Set;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.*;
+import static com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment.getRandomPointInCircle;
 
 public class EvaluationManager {
 
@@ -50,6 +63,21 @@ public class EvaluationManager {
     private static int episodeLength = 0;
     private static int totalEpisodes = 0;
     private static double averageReturn = 0.0;
+    private static double averageEpisodeLength = 0.0;
+    private static double bestReturn = Double.NEGATIVE_INFINITY;
+    private static double worstReturn = Double.POSITIVE_INFINITY;
+    private static double lastEpisodeReturn = 0.0;
+    private static int lastEpisodeLength = 0;
+    private static String lastEpisodeOutcome = "n/a";
+    private static int wins = 0;
+    private static int losses = 0;
+    private static int draws = 0;
+    private static int truncations = 0;
+    private static float episodeDamageTaken = 0.0f;
+    private static float episodeDamageDealt = 0.0f;
+    private static float lastEpisodeDamageTaken = 0.0f;
+    private static float lastEpisodeDamageDealt = 0.0f;
+    private static double lastDistanceToTarget = 0.0;
     private static long evaluationStartTime = System.currentTimeMillis();
 
     public static void setup() {
@@ -65,6 +93,7 @@ public class EvaluationManager {
         model = new MinecraftRL(device);
         model.loadCheckpoint(args.startingCheckpoint);
         model.to(device, false);
+        resetEvaluationMetrics();
 
         TensorOptions deviceTensorOptions = new TensorOptions(device);
         nextDone = torch.zeros(new long[]{args.numEnvs}, deviceTensorOptions);
@@ -89,6 +118,13 @@ public class EvaluationManager {
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Episode Return"), () -> String.format("%.2f", episodeReturn)));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Total Episodes"), () -> totalEpisodes));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Avg Return"), () -> String.format("%.2f", averageReturn)));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Avg Length"), () -> String.format("%.2f", averageEpisodeLength)));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Best Return"), () -> totalEpisodes > 0 ? String.format("%.2f", bestReturn) : "n/a"));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Worst Return"), () -> totalEpisodes > 0 ? String.format("%.2f", worstReturn) : "n/a"));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Last Outcome"), () -> lastEpisodeOutcome));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("W/L/D/T"), () -> wins + "/" + losses + "/" + draws + "/" + truncations));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Last Damage"), () -> String.format("deal %.2f / take %.2f", lastEpisodeDamageDealt, lastEpisodeDamageTaken)));
+        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Summary"), EvaluationManager::getEvaluationSummary));
 
         // DeviceStats deviceStats = torch.cuda_device_count() > 0 ?
         //     new DeviceStats() : null;
@@ -112,7 +148,7 @@ public class EvaluationManager {
     }
 
     public static void evaluationStep() {
-        if (CURRENT_MODE != MachineLearningPlayer.Mode.EVALUATION) return;
+        if (CURRENT_MODE != Mode.EVALUATION) return;
         if (!runEvaluation) return;
 
         if (!environment.isReady()) {
@@ -176,14 +212,38 @@ public class EvaluationManager {
                 StepResult stepResult = environment.postTickStep();
                 Observation observation = stepResult.observation();
 
-                if (stepResult.logicalOrTerminationAndTruncation() > 0) {
+                if (stepResult.terminated()) {
                     ResetResult resetResult = environment.reset();
                     observation = resetResult.observation();
 
-                    Vec3 location = environment.centerPosition.add(0.0, 0.1, -1 / 2.0);
+                    double minRadius = 1.0;
+                    double maxRadius = 1.0;
 
-                    environment.targetEntity.teleportTo(((CraftWorld) WORLD).getHandle(), location.x(), location.y(), location.z(), Set.of(), 0, 0, true);
-                    environment.targetEntity.snapTo(location.x(), location.y(), location.z(), 0, 0);
+                    if (CURRENT_MODE == Mode.TRAINING) {
+                        minRadius += 1.0 / 3000.0 * TrainingManager.iteration;
+                        maxRadius += 6.0 / 3000.0 * TrainingManager.iteration;
+                    } else {
+                        minRadius = 3.0;
+                        maxRadius = 8.0;
+                    }
+
+                    double[] randomPointInCircle = getRandomPointInCircle(minRadius, maxRadius);
+                    Vec3 agentLocation = environment.centerPosition.add(randomPointInCircle[0], 0, randomPointInCircle[1]);
+
+
+                    environment.targetEntity.teleportTo(((CraftWorld) WORLD).getHandle(), agentLocation.x(), agentLocation.y(), agentLocation.z(), Set.of(), 0, 0, true);
+                    environment.targetEntity.snapTo(agentLocation.x(), agentLocation.y(), agentLocation.z(), 0, 0);
+
+                    if (environment.targetEntity instanceof Player player) {
+                        player.getInventory().setSelectedSlot(0);
+                        ItemStack itemStack = Material.WOODEN_SWORD.asItemType().createItemStack();
+                        player.setItemInHand(InteractionHand.MAIN_HAND, ((CraftItemStack) itemStack).handle);
+
+                        // if (player instanceof ServerPlayer serverPlayer) {
+                        //     serverPlayer.connection.send(new ServerboundClientCommandPacket(ServerboundClientCommandPacket.Action.PERFORM_RESPAWN));
+                        // }
+                    }
+                    environment.targetEntity.setHealth(environment.targetEntity.getMaxHealth());
                 }
 
                 // Update observations
@@ -219,18 +279,47 @@ public class EvaluationManager {
 
         episodeReturn += reward;
         episodeLength++;
+        episodeDamageTaken += stepResult.damageTaken();
+        episodeDamageDealt += stepResult.damageDealt();
+        lastDistanceToTarget = stepResult.distanceToTarget();
 
         // Check for episode completion
         if (terminationOrTruncation > 0) {
             totalEpisodes++;
             averageReturn = (averageReturn * (totalEpisodes - 1) + episodeReturn) / totalEpisodes;
+            averageEpisodeLength = (averageEpisodeLength * (totalEpisodes - 1) + episodeLength) / totalEpisodes;
+            bestReturn = Math.max(bestReturn, episodeReturn);
+            worstReturn = Math.min(worstReturn, episodeReturn);
+            lastEpisodeReturn = episodeReturn;
+            lastEpisodeLength = episodeLength;
+            lastEpisodeDamageTaken = episodeDamageTaken;
+            lastEpisodeDamageDealt = episodeDamageDealt;
 
-            LOGGER.info("Episode {} completed: Return = {:.2f}, Length = {}, Avg Return = {:.2f}",
-                totalEpisodes, episodeReturn, episodeLength, averageReturn);
+            String outcome = "unknown";
+            if (stepResult.truncated()) {
+                truncations++;
+                outcome = "truncated";
+            } else if (stepResult.myHealth() > 0 && stepResult.targetHealth() <= 0) {
+                wins++;
+                outcome = "win";
+            } else if (stepResult.myHealth() <= 0 && stepResult.targetHealth() > 0) {
+                losses++;
+                outcome = "loss";
+            } else if (stepResult.myHealth() <= 0 && stepResult.targetHealth() <= 0) {
+                draws++;
+                outcome = "draw";
+            }
+
+            lastEpisodeOutcome = outcome;
+
+            LOGGER.info("Episode {} completed: outcome={}, return={}, length={}, avgReturn={}, avgLength={}, W/L/D/T={}/{}/{}/{}",
+                totalEpisodes, outcome, episodeReturn, episodeLength, averageReturn, averageEpisodeLength, wins, losses, draws, truncations);
 
             // Reset episode metrics
             episodeReturn = 0.0;
             episodeLength = 0;
+            episodeDamageTaken = 0.0f;
+            episodeDamageDealt = 0.0f;
         }
     }
 
@@ -240,6 +329,21 @@ public class EvaluationManager {
         episodeLength = 0;
         totalEpisodes = 0;
         averageReturn = 0.0;
+        averageEpisodeLength = 0.0;
+        bestReturn = Double.NEGATIVE_INFINITY;
+        worstReturn = Double.POSITIVE_INFINITY;
+        lastEpisodeReturn = 0.0;
+        lastEpisodeLength = 0;
+        lastEpisodeOutcome = "n/a";
+        wins = 0;
+        losses = 0;
+        draws = 0;
+        truncations = 0;
+        episodeDamageTaken = 0.0f;
+        episodeDamageDealt = 0.0f;
+        lastEpisodeDamageTaken = 0.0f;
+        lastEpisodeDamageDealt = 0.0f;
+        lastDistanceToTarget = 0.0;
         evaluationStartTime = System.currentTimeMillis();
     }
 
@@ -247,8 +351,34 @@ public class EvaluationManager {
         double elapsedMinutes = (System.currentTimeMillis() - evaluationStartTime) / (1000.0 * 60.0);
         double stepsPerMinute = elapsedMinutes > 0 ? currentStep / elapsedMinutes : 0;
 
-        return String.format("Evaluation Summary: %d episodes, Avg Return: %.2f, %d steps, %.1f steps/min",
-            totalEpisodes, averageReturn, currentStep, stepsPerMinute);
+        return String.format("Eval: %d ep | avgR %.2f | avgL %.2f | W/L/D/T %d/%d/%d/%d | %.1f steps/min",
+            totalEpisodes, averageReturn, averageEpisodeLength, wins, losses, draws, truncations, stepsPerMinute);
+    }
+
+    public static String getDetailedEvaluationSummary() {
+        double elapsedMinutes = (System.currentTimeMillis() - evaluationStartTime) / (1000.0 * 60.0);
+        double stepsPerMinute = elapsedMinutes > 0 ? currentStep / elapsedMinutes : 0;
+
+        return String.format(
+            "episodes=%d avgReturn=%.2f avgLength=%.2f best=%.2f worst=%.2f last=%s(%.2f/%d) W/L/D/T=%d/%d/%d/%d steps=%d stepsPerMin=%.1f lastDamage=deal %.2f take %.2f lastDist=%.2f",
+            totalEpisodes,
+            averageReturn,
+            averageEpisodeLength,
+            totalEpisodes > 0 ? bestReturn : 0.0,
+            totalEpisodes > 0 ? worstReturn : 0.0,
+            lastEpisodeOutcome,
+            lastEpisodeReturn,
+            lastEpisodeLength,
+            wins,
+            losses,
+            draws,
+            truncations,
+            currentStep,
+            stepsPerMinute,
+            lastEpisodeDamageDealt,
+            lastEpisodeDamageTaken,
+            lastDistanceToTarget
+        );
     }
 
     public static MinecraftEnvironment getEnvironment() {
