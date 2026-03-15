@@ -3,6 +3,7 @@ package com.tenbitmelon.machinelearningplayer.models;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import com.tenbitmelon.machinelearningplayer.util.distributions.Categorical;
 import com.tenbitmelon.machinelearningplayer.util.distributions.Normal;
+import org.bytedeco.javacpp.LongPointer;
 import org.bytedeco.javacpp.PointerScope;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.Module;
@@ -29,9 +30,41 @@ public class MinecraftRL extends Module {
     final LinearImpl critic;
     final LinearImpl actorAttackUseItem;
     final Device device;
+    final SequentialImpl localHeightmapConv;
+    final LinearImpl actorSlot;
 
     public MinecraftRL(Device device) {
         this.device = device;
+        /*
+         // Conv2d for local heightmaps
+        self.local_heightmap_conv = nn.Sequential(
+            layer_init(nn.Conv2d(1, 4, kernel_size=3, stride=1, padding=0)),
+            nn.Tanh(),
+            nn.Flatten(),
+            layer_init(nn.Linear(5 * 5 * 4, 16)),
+            nn.Tanh(),
+         */
+
+        // Conv2d Input size = [B, 1, 7, 7]
+        Conv2dOptions conv2dOptions = new Conv2dOptions(1, 4, new LongPointer(3, 3));
+        // conv2dOptions.stride().put(1);
+        // conv2dOptions.padding().get0().put(0);
+        Conv2dImpl conv2d = new Conv2dImpl(conv2dOptions);
+        TanhImpl convTanh1 = new TanhImpl();
+        FlattenImpl flatten = new FlattenImpl();
+        LinearImpl convLinear = createLinearLayer(5 * 5 * 4, 16, device);
+        TanhImpl convTanh2 = new TanhImpl();
+
+        SequentialImpl localHeightmapConv = new SequentialImpl();
+        localHeightmapConv.push_back("height_conv_conv2d", conv2d);
+        localHeightmapConv.push_back("height_conv_tanh1", convTanh1);
+        localHeightmapConv.push_back("height_conv_flatten", flatten);
+        localHeightmapConv.push_back("height_conv_linear", convLinear);
+        localHeightmapConv.push_back("height_conv_tanh2", convTanh2);
+
+        register_module("height_conv", localHeightmapConv);
+        this.localHeightmapConv = localHeightmapConv;
+
         /*
         other_features_dim = 128
         self.network = nn.Sequential(
@@ -42,7 +75,7 @@ public class MinecraftRL extends Module {
         )
         */
 
-        long observationSize = Observation.OBSERVATION_SPACE_SIZE;
+        long observationSize = Observation.OBSERVATION_SPACE_SIZE - Observation.SIZE_LOCAL_HEIGHT_MAP + 16; // 16 is the output size of the local heightmap conv layers
 
         LinearImpl networkLinear1 = createLinearLayer(observationSize, 64, device);
         TanhImpl networkTanh1 = new TanhImpl();
@@ -131,6 +164,11 @@ public class MinecraftRL extends Module {
         LinearImpl actorAttackUseItem = createLinearLayer(64, 3, 0.01, device); // 3 outputs: no attack/use, attack, use
         register_module("actor_attack_use_item", actorAttackUseItem);
         this.actorAttackUseItem = actorAttackUseItem;
+
+        // Slot 0 or 1
+        LinearImpl actorSlot = createLinearLayer(64, 2, 0.01, device); // 2 outputs: slot 0 or slot 1
+        register_module("actor_slot", actorSlot);
+        this.actorSlot = actorSlot;
 
         /*
         self.critic = layer_init(nn.Linear(64, 1), std=1)
@@ -229,13 +267,28 @@ public class MinecraftRL extends Module {
     }
 
     // Tensor observation is [B, OBSERVATION_SPACE_SIZE]
-    public States getStates(Tensor observation, LSTMState lstmState, Tensor done) {
+    public States getStates(Tensor observationTensor, LSTMState lstmState, Tensor done) {
         PointerScope scope = new PointerScope();
         /*
-        hidden = self.network(x)
-         */
+        height = x[:, -self.local_heightmap_conv[0][0].in_channels * self.local_heightmap_conv[0][0].kernel_size[0] ** 2 :].reshape(-1, 1, 7, 7)
+        height_features = self.local_heightmap_conv(height).reshape(-1, 16)
 
-        Tensor hidden = this.network.forward(observation);
+        remaining_obs = x[:, :-self.local_heightmap_conv[0][0].in_channels * self.local_heightmap_conv[0][0].kernel_size[0] ** 2]
+        observation = torch.cat([remaining_obs, height_features], dim=1)
+        hidden = self.network(observation)
+         */
+        if (observationTensor.dim() == 1) {
+            observationTensor = observationTensor.unsqueeze(0); // Add batch dimension if missing
+        }
+
+        Tensor localHeightMap = observationTensor.narrow(1, Observation.OFFSET_LOCAL_HEIGHT_MAP, Observation.SIZE_LOCAL_HEIGHT_MAP); // size (B, 49)
+        Tensor localHeightMapReshaped = localHeightMap.reshape(-1, 1, 7, 7); // size (B, 1, 7, 7)
+        Tensor heightFeatures = this.localHeightmapConv.forward(localHeightMapReshaped); // size (B, 16)
+
+        Tensor remainingObs = observationTensor.narrow(1, 0, Observation.OFFSET_LOCAL_HEIGHT_MAP); // size (B, OBSERVATION_SPACE_SIZE - 49)
+        Tensor combinedObs = torch.cat(new TensorVector(remainingObs, heightFeatures), 1); // size (B, OBSERVATION_SPACE_SIZE - 49 + 16)
+
+        Tensor hidden = this.network.forward(combinedObs); // size (B, 64)
 
         /*
         batch_size = lstm_state[0].shape[1]
@@ -419,6 +472,10 @@ public class MinecraftRL extends Module {
         Tensor attackUseItemLogits = this.actorAttackUseItem.forward(hidden);
         Categorical attackUseItemProbs = new Categorical(attackUseItemLogits);
 
+        // Slot 0 or 1
+        Tensor slotLogits = this.actorSlot.forward(hidden);
+        Categorical slotProbs = new Categorical(slotLogits);
+
         /*
         if action is None:
             x_action = x_probs.sample()
@@ -440,6 +497,7 @@ public class MinecraftRL extends Module {
         Tensor jumpKeyAction;
         Tensor sprintSneakKeysAction;
         Tensor attackUseItemAction;
+        Tensor slotAction;
 
         if (action == null) {
             forwardMoveKeysAction = forwardMoveKeysProbs.sample(); // LongTensor
@@ -449,6 +507,7 @@ public class MinecraftRL extends Module {
             jumpKeyAction = jumpKeyProbs.sample(); // LongTensor
             sprintSneakKeysAction = sprintSneakKeysProbs.sample(); // LongTensor
             attackUseItemAction = attackUseItemProbs.sample(); // LongTensor
+            slotAction = slotProbs.sample(); // LongTensor
 
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
             Tensor jumpFloat = jumpKeyAction.to(torch.ScalarType.Float);
@@ -456,6 +515,7 @@ public class MinecraftRL extends Module {
             Tensor forwardFloat = forwardMoveKeysAction.to(torch.ScalarType.Float);
             Tensor strafingFloat = strafingMoveKeysAction.to(torch.ScalarType.Float);
             Tensor useFloat = attackUseItemAction.to(torch.ScalarType.Float);
+            Tensor slotFloat = slotAction.to(torch.ScalarType.Float);
             TensorVector tensorVector = new TensorVector(
                 jumpFloat,
                 sprintSneakFlaot,
@@ -463,7 +523,8 @@ public class MinecraftRL extends Module {
                 pitchAction,
                 forwardFloat,
                 strafingFloat,
-                useFloat
+                useFloat,
+                slotFloat
             );
             action = torch.stack(tensorVector, 1);
             jumpFloat.close();
@@ -471,6 +532,7 @@ public class MinecraftRL extends Module {
             forwardFloat.close();
             strafingFloat.close();
             useFloat.close();
+            slotFloat.close();
             tensorVector.close();
         } else {
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
@@ -516,6 +578,12 @@ public class MinecraftRL extends Module {
             attackUseItemAction = attackUseItemSqueeze.to(torch.ScalarType.Long);
             attackUseItemNarrow.close();
             attackUseItemSqueeze.close();
+
+            Tensor slotNarrow = action.narrow(1, 7, 1);
+            Tensor slotSqueeze = slotNarrow.squeeze(1);
+            slotAction = slotSqueeze.to(torch.ScalarType.Long);
+            slotNarrow.close();
+            slotSqueeze.close();
         }
 
         /*
@@ -533,6 +601,7 @@ public class MinecraftRL extends Module {
         Tensor jumpKeyLogProbs = jumpKeyProbs.logProb(jumpKeyAction);
         Tensor sprintSneakKeysLogProbs = sprintSneakKeysProbs.logProb(sprintSneakKeysAction);
         Tensor attackUseItemLogProbs = attackUseItemProbs.logProb(attackUseItemAction);
+        Tensor slotLogProbs = slotProbs.logProb(slotAction);
 
         Tensor totalLogProbs = forwardMoveKeysLogProbs
             .add_(strafingMoveKeysLogProbs)
@@ -540,7 +609,8 @@ public class MinecraftRL extends Module {
             .add_(pitchLogProbs)
             .add_(jumpKeyLogProbs)
             .add_(sprintSneakKeysLogProbs)
-            .add_(attackUseItemLogProbs);
+            .add_(attackUseItemLogProbs)
+            .add_(slotLogProbs);
 
         /*
         entropy = x_probs.entropy() + y_probs.entropy() + rot_dist.entropy()
@@ -553,6 +623,7 @@ public class MinecraftRL extends Module {
         Tensor jumpKeyEntropy = jumpKeyProbs.entropy();
         Tensor sprintSneakKeysEntropy = sprintSneakKeysProbs.entropy();
         Tensor attackUseItemEntropy = attackUseItemProbs.entropy();
+        Tensor slotEntropy = slotProbs.entropy();
 
         Tensor totalEntropy = forwardMoveKeysEntropy
             .add(strafingMoveKeysEntropy)
@@ -560,7 +631,8 @@ public class MinecraftRL extends Module {
             .add(pitchEntropy)
             .add(jumpKeyEntropy)
             .add(sprintSneakKeysEntropy)
-            .add(attackUseItemEntropy);
+            .add(attackUseItemEntropy)
+            .add(slotEntropy);
 
         /*
         return (
@@ -581,6 +653,7 @@ public class MinecraftRL extends Module {
         jumpKeyProbs.close();
         sprintSneakKeysProbs.close();
         attackUseItemProbs.close();
+        slotProbs.close();
 
         action.retainReference();
         totalLogProbs.retainReference();

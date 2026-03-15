@@ -38,6 +38,7 @@ import java.util.Set;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.*;
 import static com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment.getRandomPointInCircle;
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class EvaluationManager {
 
@@ -124,7 +125,6 @@ public class EvaluationManager {
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Last Outcome"), () -> lastEpisodeOutcome));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("W/L/D/T"), () -> wins + "/" + losses + "/" + draws + "/" + truncations));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Last Damage"), () -> String.format("deal %.2f / take %.2f", lastEpisodeDamageDealt, lastEpisodeDamageTaken)));
-        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Summary"), EvaluationManager::getEvaluationSummary));
 
         // DeviceStats deviceStats = torch.cuda_device_count() > 0 ?
         //     new DeviceStats() : null;
@@ -347,13 +347,6 @@ public class EvaluationManager {
         evaluationStartTime = System.currentTimeMillis();
     }
 
-    public static String getEvaluationSummary() {
-        double elapsedMinutes = (System.currentTimeMillis() - evaluationStartTime) / (1000.0 * 60.0);
-        double stepsPerMinute = elapsedMinutes > 0 ? currentStep / elapsedMinutes : 0;
-
-        return String.format("Eval: %d ep | avgR %.2f | avgL %.2f | W/L/D/T %d/%d/%d/%d | %.1f steps/min",
-            totalEpisodes, averageReturn, averageEpisodeLength, wins, losses, draws, truncations, stepsPerMinute);
-    }
 
     public static String getDetailedEvaluationSummary() {
         double elapsedMinutes = (System.currentTimeMillis() - evaluationStartTime) / (1000.0 * 60.0);

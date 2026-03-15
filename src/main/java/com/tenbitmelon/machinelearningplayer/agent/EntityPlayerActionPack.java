@@ -156,6 +156,23 @@ public class EntityPlayerActionPack {
         return stopMovement();
     }
 
+    public EntityPlayerActionPack stop(ActionType type) {
+        Action previous = actions.remove(type);
+        if (previous != null) type.stop(player, previous);
+        return this;
+    }
+
+    public EntityPlayerActionPack stopAllButUse() {
+        for (ActionType type : actions.keySet()) {
+            if (type != ActionType.USE) {
+                Action previous = actions.get(type);
+                if (previous != null) type.stop(player, previous);
+            }
+        }
+        actions.entrySet().removeIf(e -> e.getKey() != ActionType.USE);
+        return stopMovement();
+    }
+
     public EntityPlayerActionPack mount(boolean onlyRideables) {
         // test what happens
         List<Entity> entities;

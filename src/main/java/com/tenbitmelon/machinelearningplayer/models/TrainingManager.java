@@ -145,7 +145,6 @@ public class TrainingManager {
         Debugger.mainDebugWindow.addControl(new BooleanControl(Component.text("Sprint"), () -> sprint, (value) -> sprint = value));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Iteration"), () -> iteration));
         Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Step"), () -> step));
-        Debugger.mainDebugWindow.addControl(new VariableControl(Component.text("Summary"), TrainingManager::getTrainingSummary));
         Debugger.mainDebugWindow.addText("");
         Debugger.mainDebugWindow.addText("Arguments:");
         // args

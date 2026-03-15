@@ -15,6 +15,7 @@ import org.bukkit.*;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bytedeco.pytorch.Tensor;
 
@@ -29,6 +30,8 @@ public class MinecraftEnvironment {
     public static final int NORMALIZATION_DISTANCE = 15;
     private static int nextEnvironmentId = 0;
     public final Vec3 centerPosition;
+    public final int posX;
+    public final int posZ;
     public final int environmentId;
     private final ExperimentConfig args;
     public Agent agent;
@@ -38,6 +41,7 @@ public class MinecraftEnvironment {
     private float lastKnownTargetHealth = 0.0f;
     private float lastKnownMyHealth = 0.0f;
     private float lastKnownDistanceToTarget = 0.0f;
+    private int ticksActionUse = 0;
 
     private int[][] heightMap = new int[32][32];
 
@@ -52,6 +56,8 @@ public class MinecraftEnvironment {
         generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 2);
         generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 2);
 
+        this.posX = (coords[0] * 2 + 1) * 16;
+        this.posZ = (coords[1] * 2 + 1) * 16;
         double centerX = (coords[0] * 2 + 2) * 16.0;
         double centerZ = (coords[1] * 2 + 2) * 16.0;
 
@@ -164,7 +170,7 @@ public class MinecraftEnvironment {
                     double barycentricC = areaBPD / area;
 
                     double heightAtP = barycentricB * heightB + barycentricD * heightD + barycentricC * heightC;
-                    baseY = (int) Math.round(heightAtP);
+                    baseY = (int) heightAtP;
                 } else {
                     // ABC side
                     double areaAPB = offsetZ * 16.0 / 2.0;
@@ -177,7 +183,7 @@ public class MinecraftEnvironment {
 
 
                     double heightAtP = barycentricA * heightA + barycentricB * heightB + barycentricC * heightC;
-                    baseY = (int) Math.round(heightAtP);
+                    baseY = (int) heightAtP;
                 }
 
                 // Set in the height map
@@ -239,6 +245,33 @@ public class MinecraftEnvironment {
         // My health
         float myHealth = agent.getHealth() / agent.getMaxHealth();
 
+        // Local height map rotated relative to the agent's orientation, centered on the agent, and normalized by an expected max relative height difference (e.g. 10 blocks)
+        float[] localHeightMap = new float[Observation.SIZE_LOCAL_HEIGHT_MAP];
+        for (int x = 0; x < 7; x++) {
+            for (int z = 0; z < 7; z++) {
+                int localX = x - 3;
+                int localZ = z - 3;
+
+                Vec3 vec = new Vec3(localX, 0.0, localZ).yRot(-yawRadians);
+
+                int worldX = (int) (agent.getX() + vec.x);
+                int worldZ = (int) (agent.getZ() + vec.z);
+
+                int envX = worldX - posX;
+                int envZ = worldZ - posZ;
+
+                if (envX < 0 || envX >= 32 || envZ < 0 || envZ >= 32) {
+                    localHeightMap[x * 7 + z] = 1.0f; // Default value for out-of-bounds
+                    continue;
+                }
+
+                // Get the height of the block at this world coordinate
+                int blockY = heightMap[worldX - posX][worldZ - posZ]; // Use modulo to wrap around the height map
+                float relativeHeight = (float) (blockY - agent.getY());
+                localHeightMap[x * 7 + z] = relativeHeight / 10.0f; // Normalize by expected max relative height
+            }
+        }
+
         Observation observation = new Observation(
             pitchScaled,
             agent.actionPack.sprinting,
@@ -249,7 +282,8 @@ public class MinecraftEnvironment {
             agentVelocity,
             opponentDirectionLocalSpace,
             opponentDistance,
-            opponentVelocity
+            opponentVelocity,
+            localHeightMap
         );
 
         agent.displayObservation(observation);
@@ -260,11 +294,11 @@ public class MinecraftEnvironment {
     public ResetResult reset() {
         this.currentStep = 0;
 
-        int[] coords = szudzikUnpairing(this.environmentId / 2);
-        generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 1);
-        generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 1);
-        generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 2);
-        generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 2);
+        // int[] coords = szudzikUnpairing(this.environmentId / 2);
+        // generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 1);
+        // generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 1);
+        // generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 2);
+        // generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 2);
 
         double minRadius = 1.0;
         double maxRadius = 1.0;
@@ -279,7 +313,8 @@ public class MinecraftEnvironment {
 
 
         double[] randomPointInCircle = getRandomPointInCircle(minRadius, maxRadius);
-        Vec3 agentLocation = centerPosition.add(randomPointInCircle[0], 0, randomPointInCircle[1]);
+        int height = heightMap[16 + (int) randomPointInCircle[0]][16 + (int) randomPointInCircle[1]];
+        Vec3 agentLocation = centerPosition.add(randomPointInCircle[0], height + 1.0, randomPointInCircle[1]);
 
         this.agent.reset(agentLocation);
 
@@ -299,6 +334,7 @@ public class MinecraftEnvironment {
         lastKnownTargetHealth = targetEntity.getMaxHealth();
         lastKnownMyHealth = agent.getMaxHealth();
         lastKnownDistanceToTarget = 0.0f;
+        ticksActionUse = 0;
 
         return new ResetResult(getObservation());
     }
@@ -307,7 +343,8 @@ public class MinecraftEnvironment {
         Action action = new Action(actionTensor);
 
         this.currentStep++;
-        agent.actionPack.stopAll();
+        agent.actionPack.stopMovement();
+        agent.actionPack.stopAllButUse();
 
         int sprintingSneaking = action.sprintingSneaking();
         if (sprintingSneaking == 1) {
@@ -346,11 +383,20 @@ public class MinecraftEnvironment {
         agent.actionPack.setForward(moveForward);
         agent.actionPack.setStrafing(moveRight);
 
+        int slotChange = action.slotChange();
+        agent.getInventory().setSelectedSlot(slotChange);
+
         int attackUse = action.attackUseItem();
-        if (attackUse == 1) {
-            agent.actionPack.start(EntityPlayerActionPack.ActionType.ATTACK, EntityPlayerActionPack.Action.once());
-        } else if (attackUse == 2) {
-            agent.actionPack.start(EntityPlayerActionPack.ActionType.USE, EntityPlayerActionPack.Action.once());
+        if (attackUse == 2) {
+            if (ticksActionUse == 0)
+                agent.actionPack.start(EntityPlayerActionPack.ActionType.USE, EntityPlayerActionPack.Action.continuous());
+            ticksActionUse++;
+        } else {
+            agent.actionPack.stop(EntityPlayerActionPack.ActionType.USE);
+            ticksActionUse = 0;
+            if (attackUse == 1) {
+                agent.actionPack.start(EntityPlayerActionPack.ActionType.ATTACK, EntityPlayerActionPack.Action.once());
+            }
         }
 
         action.close();
@@ -379,6 +425,9 @@ public class MinecraftEnvironment {
         reward += 0.05f * damageDealt;
         reward += -0.02f * damageTaken;
         reward += -0.001f; // timestep cost
+
+        // Holding use hint reward
+        reward += 0.001f * ticksActionUse;
 
         if (myHealth <= 0 && targetHealth > 0) {
             // I LOST (I died, other is still up)
@@ -414,6 +463,38 @@ public class MinecraftEnvironment {
         }
 
         Observation observation = getObservation();
+        // {
+        //     Player target = Bukkit.getPlayer("melonboy10");
+        //     if (target.getX() > posX && target.getZ() > posZ && target.getX() < posX + 32 && target.getZ() < posZ + 32) {
+        //         // Target is within this environment's chunk, so we can visualize the local height map
+        //
+        //         float yawRadians = (float) Math.toRadians(target.getYaw());
+        //
+        //         // // For loop over the local height map in the observation and spawn particles at the corresponding world coordinates with a height based on the value in the height map for debugging
+        //         // Tensor localHeightMap = observation.localHeightMap();
+        //         for (int x = 0; x < 7; x++) {
+        //             for (int z = 0; z < 7; z++) {
+        //                 float heightValue = localHeightMap[(x * 7 + z)];
+        //                 Vec3 vec = new Vec3(x - 3, 0.0, z - 3).yRot(-yawRadians);
+        //
+        //                 double worldX = target.getX() + vec.x;
+        //                 double worldY = target.getY() + heightValue * 10.0f + 1.0f; // scale back up to world coordinates
+        //                 double worldZ = target.getZ() + vec.z;
+        //                 WORLD.spawnParticle(Particle.BUBBLE, worldX, worldY, worldZ, 1, 0, 0, 0, 0, null);
+        //             }
+        //         }
+        //     }
+        // }
+        // Bubble the whole height map for debugging
+        // for (int x = 0; x < 32; x++) {
+        //     for (int z = 0; z < 32; z++) {
+        //         int blockY = heightMap[x][z];
+        //         double worldX = centerPosition.x + x - 16 + 0.5;
+        //         double worldY = blockY + 1;
+        //         double worldZ = centerPosition.z + z - 16 + 0.5;
+        //         WORLD.spawnParticle(Particle.BUBBLE, worldX, worldY, worldZ, 1, 0, 0, 0, 0, null);
+        //     }
+        // }
 
         return new StepResult(
             observation,

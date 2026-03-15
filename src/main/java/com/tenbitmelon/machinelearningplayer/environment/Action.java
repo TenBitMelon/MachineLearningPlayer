@@ -12,6 +12,7 @@ public class Action implements AutoCloseable {
     private static final int SIZE_FORWARD_MOVE_KEY = 1;
     private static final int SIZE_STRAFE_MOVE_KEY = 1;
     private static final int SIZE_ATTACK_USE_ITEM = 1;
+    private static final int SIZE_SLOT_CHANGE = 1;
 
     private static final int OFFSET_JUMPING = 0;
     private static final int OFFSET_SPRINTING_SNEAKING = OFFSET_JUMPING + SIZE_JUMPING;
@@ -19,8 +20,9 @@ public class Action implements AutoCloseable {
     private static final int OFFSET_FORWARD_MOVE_KEY = OFFSET_LOOK_CHANGE + SIZE_LOOK_CHANGE;
     private static final int OFFSET_STRAFE_MOVE_KEY = OFFSET_FORWARD_MOVE_KEY + SIZE_FORWARD_MOVE_KEY;
     private static final int OFFSET_ATTACK_USE_ITEM = OFFSET_STRAFE_MOVE_KEY + SIZE_STRAFE_MOVE_KEY;
+    private static final int OFFSET_SLOT_CHANGE = OFFSET_ATTACK_USE_ITEM + SIZE_ATTACK_USE_ITEM;
 
-    public static final int ACTION_SPACE_SIZE = OFFSET_ATTACK_USE_ITEM + SIZE_ATTACK_USE_ITEM;
+    public static final int ACTION_SPACE_SIZE = OFFSET_SLOT_CHANGE + SIZE_SLOT_CHANGE;
 
     final Tensor data;
     private FloatPointer cachedData;
@@ -87,6 +89,15 @@ public class Action implements AutoCloseable {
      */
     public int attackUseItem() {
         return (int) cachedData.get(OFFSET_ATTACK_USE_ITEM);
+    }
+
+    /**
+     * Slot Change:
+     * - Shape: (1,)
+     * 0 - slot 0, 1 - slot 1
+     */
+    public int slotChange() {
+        return (int) cachedData.get(OFFSET_SLOT_CHANGE);
     }
 
     @Override
