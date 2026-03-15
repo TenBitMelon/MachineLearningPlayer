@@ -42,6 +42,7 @@ public class MinecraftEnvironment {
     private float lastKnownMyHealth = 0.0f;
     private float lastKnownDistanceToTarget = 0.0f;
     private int ticksActionUse = 0;
+    private int lastSlotSelected = 0;
 
     private int[][] heightMap = new int[32][32];
 
@@ -335,6 +336,7 @@ public class MinecraftEnvironment {
         lastKnownMyHealth = agent.getMaxHealth();
         lastKnownDistanceToTarget = 0.0f;
         ticksActionUse = 0;
+        lastSlotSelected = 0;
 
         return new ResetResult(getObservation());
     }
@@ -388,8 +390,9 @@ public class MinecraftEnvironment {
 
         int attackUse = action.attackUseItem();
         if (attackUse == 2) {
-            if (ticksActionUse == 0)
+            if (ticksActionUse == 0 || lastSlotSelected != slotChange) {
                 agent.actionPack.start(EntityPlayerActionPack.ActionType.USE, EntityPlayerActionPack.Action.continuous());
+            }
             ticksActionUse++;
         } else {
             agent.actionPack.stop(EntityPlayerActionPack.ActionType.USE);
@@ -399,6 +402,7 @@ public class MinecraftEnvironment {
             }
         }
 
+        lastSlotSelected = slotChange;
         action.close();
     }
 
@@ -427,7 +431,7 @@ public class MinecraftEnvironment {
         reward += -0.001f; // timestep cost
 
         // Holding use hint reward
-        reward += 0.001f * ticksActionUse;
+        reward += 0.00001f * ticksActionUse;
 
         if (myHealth <= 0 && targetHealth > 0) {
             // I LOST (I died, other is still up)
