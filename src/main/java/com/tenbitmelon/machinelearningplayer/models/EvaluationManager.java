@@ -198,6 +198,7 @@ public class EvaluationManager {
                 logText = "Stepping environment...";
                 environment.preTickStep(actionTensor);
                 actionTensor.close();
+                actionResult.close();
 
                 needsPostTickStep = true;
             } finally {
@@ -211,10 +212,11 @@ public class EvaluationManager {
             try {
                 StepResult stepResult = environment.postTickStep();
                 Observation observation = stepResult.observation();
+                ResetResult resetAfterTermination = null;
 
                 if (stepResult.terminated()) {
-                    ResetResult resetResult = environment.reset();
-                    observation = resetResult.observation();
+                    resetAfterTermination = environment.reset();
+                    observation = resetAfterTermination.observation();
 
                     double minRadius = 1.0;
                     double maxRadius = 1.0;
@@ -264,6 +266,9 @@ public class EvaluationManager {
                 updateEvaluationMetrics(stepResult);
 
                 currentStep++;
+                if (resetAfterTermination != null) {
+                    resetAfterTermination.close();
+                }
             } finally {
                 scope.close();
                 needsPostTickStep = false;

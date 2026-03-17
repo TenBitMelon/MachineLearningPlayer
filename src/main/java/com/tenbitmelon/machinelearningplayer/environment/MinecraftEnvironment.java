@@ -301,20 +301,26 @@ public class MinecraftEnvironment {
         // generateFloorForChunk(coords[0] * 2, 1, coords[1] * 2, 2);
         // generateFloorForChunk(coords[0] * 2, 2, coords[1] * 2, 2);
 
-        double minRadius = 1.0;
-        double maxRadius = 1.0;
+        double minRadius = 3.0;
+        double maxRadius = 8.0;
 
-        if (CURRENT_MODE == MachineLearningPlayer.Mode.TRAINING) {
-            minRadius += 1.0 / 3000.0 * TrainingManager.iteration;
-            maxRadius += 6.0 / 3000.0 * TrainingManager.iteration;
-        } else {
-            minRadius = 3.0;
-            maxRadius = 8.0;
-        }
+        // if (CURRENT_MODE == MachineLearningPlayer.Mode.TRAINING && TrainingManager.iteration < 5000) {
+        //     minRadius += 1.0 / 3000.0 * TrainingManager.iteration;
+        //     maxRadius += 6.0 / 3000.0 * TrainingManager.iteration;
+        // } else {
+        //     minRadius = 3.0;
+        //     maxRadius = 8.0;
+        // }
 
 
         double[] randomPointInCircle = getRandomPointInCircle(minRadius, maxRadius);
-        int height = heightMap[16 + (int) randomPointInCircle[0]][16 + (int) randomPointInCircle[1]];
+        int[] randomPointInCircleInt = {(int) randomPointInCircle[0], (int) randomPointInCircle[1]};
+        int height;
+        if ((randomPointInCircleInt[0] + 16) < 0 || (randomPointInCircleInt[0] + 16) >= 32 || (randomPointInCircleInt[1] + 16) < 0 || (randomPointInCircleInt[1] + 16) >= 32) {
+            height = 8;
+        } else {
+            height = heightMap[16 + randomPointInCircleInt[0]][16 + randomPointInCircleInt[1]];
+        }
         Vec3 agentLocation = centerPosition.add(randomPointInCircle[0], height + 1.0, randomPointInCircle[1]);
 
         this.agent.reset(agentLocation);
@@ -433,6 +439,12 @@ public class MinecraftEnvironment {
         // Holding use hint reward
         reward += 0.00001f * ticksActionUse;
 
+        // Reward shooting a bow
+        if (lastSlotSelected == 1 && ticksActionUse == 20) {
+            // The bow is fully drawn at 20 ticks, so give a reward for that
+            reward += 0.1f;
+        }
+
         if (myHealth <= 0 && targetHealth > 0) {
             // I LOST (I died, other is still up)
             reward += -10.0f;
@@ -509,7 +521,11 @@ public class MinecraftEnvironment {
             targetHealth,
             damageTaken,
             damageDealt,
-            distanceTo
+            distanceTo,
+            lastSlotSelected == 1,
+            lastSlotSelected == 1 && ticksActionUse > 0,
+            lastSlotSelected == 1 && ticksActionUse >= 20,
+            lastSlotSelected == 0 && ticksActionUse > 0
         );
     }
 

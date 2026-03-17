@@ -40,7 +40,10 @@ public class Categorical implements AutoCloseable {
     public Tensor sample() {
         Tensor probs2d = this.probs.reshape(-1, this.numEvents);
         Tensor samples2d = torch.multinomial(probs2d, 1, true, null).t();
-        return samples2d.reshape(batchSize);
+        Tensor reshaped = samples2d.reshape(batchSize);
+        probs2d.close();
+        samples2d.close();
+        return reshaped;
     }
 
     /*
@@ -54,13 +57,26 @@ public class Categorical implements AutoCloseable {
      */
 
     public Tensor logProb(Tensor value) {
-        value = value.to(torch.ScalarType.Long).unsqueeze(-1);
-        TensorVector vector = new TensorVector(value, this.logits);
+        Tensor longValue = value.to(torch.ScalarType.Long);
+        Tensor unsqueezed = longValue.unsqueeze(-1);
+        TensorVector vector = new TensorVector(unsqueezed, this.logits);
         TensorVector broadcasted = torch.broadcast_tensors(vector);
-        value = broadcasted.get(0);
+        Tensor broadFirst = broadcasted.get(0);
         Tensor log_pmf = broadcasted.get(1);
-        value = value.slice(-1, new LongOptional(0), new LongOptional(1), 1);
-        return log_pmf.gather(-1, value).squeeze(-1);
+        Tensor sliced = broadFirst.slice(-1, new LongOptional(0), new LongOptional(1), 1);
+        Tensor gathered = log_pmf.gather(-1, sliced);
+        Tensor squeezed = gathered.squeeze(-1);
+
+        longValue.close();
+        unsqueezed.close();
+        vector.close();
+        broadcasted.close();
+        broadFirst.close();
+        log_pmf.close();
+        sliced.close();
+        gathered.close();
+
+        return squeezed;
     }
 
 
@@ -74,7 +90,11 @@ public class Categorical implements AutoCloseable {
 
     public Tensor entropy() {
         Tensor pLogP = this.logits.mul(this.probs);
-        return pLogP.sum(-1).neg();
+        Tensor summed = pLogP.sum(-1);
+        Tensor entropy = summed.neg();
+        pLogP.close();
+        summed.close();
+        return entropy;
     }
 
     public void close() {

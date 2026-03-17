@@ -11,6 +11,7 @@ import com.tenbitmelon.machinelearningplayer.environment.Action;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
+import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.PointerScope;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.cuda.CUDAAllocator;
@@ -90,6 +91,10 @@ public class TrainingManager {
     private static double lastSps = 0.0;
     private static double lastAverageRewards = 0.0;
     private static double lastTotalRewards = 0.0;
+    private static int lastBowSelectedSteps = 0;
+    private static int lastBowDrawingSteps = 0;
+    private static int lastBowFullyDrawnSteps = 0;
+    private static int lastShieldUsingSteps = 0;
 
     public static void setup() {
 
@@ -247,6 +252,10 @@ public class TrainingManager {
         // Reset iteration stats
         numTerminations = 0;
         numTruncations = 0;
+        lastBowSelectedSteps = 0;
+        lastBowDrawingSteps = 0;
+        lastBowFullyDrawnSteps = 0;
+        lastShieldUsingSteps = 0;
 
 
         /*
@@ -286,9 +295,13 @@ public class TrainingManager {
 
         // globalStep += args.numEnvs;
         try (Tensor slice = observations.get(step)) {
-            slice.copy_(nextObs.detach());
+            Tensor detached = nextObs.detach();
+            slice.copy_(detached);
+            detached.close();
         }
-        dones.get(step).copy_(nextDone);
+        try (Tensor doneSlice = dones.get(step)) {
+            doneSlice.copy_(nextDone);
+        }
 
         /*
         with torch.no_grad():
@@ -324,8 +337,14 @@ public class TrainingManager {
          */
 
         Tensor actionResultAction = actionResult.action();
-        actions.get(step).copy_(actionResultAction.detach());
-        logprobs.get(step).copy_(actionResult.totalLogProbs());
+        try (Tensor actionSlice = actions.get(step)) {
+            Tensor detachedAction = actionResultAction.detach();
+            actionSlice.copy_(detachedAction);
+            detachedAction.close();
+        }
+        try (Tensor logProbSlice = logprobs.get(step)) {
+            logProbSlice.copy_(actionResult.totalLogProbs());
+        }
 
         logText = "Stepping environment for step " + step;
         /*
@@ -375,7 +394,9 @@ public class TrainingManager {
         Tensor cpuStepRewards = Tensor.create(stepResult.rewards());
         Tensor gpuStepRewards = cpuStepRewards.to(device, torch.ScalarType.Float);
         Tensor newRewardsTensor = gpuStepRewards.view(-1);
-        rewards.get(step).copy_(newRewardsTensor);
+        try (Tensor rewardSlice = rewards.get(step)) {
+            rewardSlice.copy_(newRewardsTensor);
+        }
         newRewardsTensor.close();
         gpuStepRewards.close();
         cpuStepRewards.close();
@@ -386,6 +407,10 @@ public class TrainingManager {
 
         numTerminations += stepResult.numTerminations();
         numTruncations += stepResult.numTruncations();
+        lastBowSelectedSteps += stepResult.bowSelectedSteps();
+        lastBowDrawingSteps += stepResult.bowDrawingSteps();
+        lastBowFullyDrawnSteps += stepResult.bowFullyDrawnSteps();
+        lastShieldUsingSteps += stepResult.shieldUsingSteps();
 
         stepResult.close();
 
@@ -424,8 +449,9 @@ public class TrainingManager {
         advantages = torch.zeros_like(rewards).to(device)
          */
 
-        Tensor nextValue = model.getValue(nextObs, nextLstmState, nextDone);
-        nextValue = nextValue.reshape(-1);
+        Tensor nextValueRaw = model.getValue(nextObs, nextLstmState, nextDone);
+        Tensor nextValue = nextValueRaw.reshape(-1);
+        nextValueRaw.close();
         advantages.zero_();
 
         /*
@@ -479,6 +505,9 @@ public class TrainingManager {
             mul2.close();
             advantage.close();
             nextNonTerminal.close();
+            if (t != args.numSteps - 1) {
+                nextValues.close();
+            }
 
             loopScope.close();
         }
@@ -656,7 +685,15 @@ public class TrainingManager {
                 if (args.normAdv) {
                     Tensor mean = mbAdvantages.mean();
                     Tensor std = mbAdvantages.std();
-                    mbAdvantages = mbAdvantages.sub(mean).div(std.add(SCALAR_1E_8));
+                    Tensor shiftedAdvantages = mbAdvantages.sub(mean);
+                    Tensor stdWithEps = std.add(SCALAR_1E_8);
+                    Tensor normalizedAdvantages = shiftedAdvantages.div(stdWithEps);
+                    mbAdvantages.close();
+                    mean.close();
+                    std.close();
+                    shiftedAdvantages.close();
+                    stdWithEps.close();
+                    mbAdvantages = normalizedAdvantages;
                 }
 
                 /*
@@ -712,6 +749,10 @@ public class TrainingManager {
                     Tensor vLossClipped = vClipped.sub(bReturnsMbInds).square();
                     Tensor vLossMax = torch.max(vLossUnclipped, vLossClipped);
                     vLoss = vLossMax.mean().mul(SCALAR_0_5);
+                    vLossUnclipped.close();
+                    vClipped.close();
+                    vLossClipped.close();
+                    vLossMax.close();
                 } else {
                     /*
                     else:
@@ -747,6 +788,7 @@ public class TrainingManager {
                 actionAndValueResult.close();
                 mbenvinds.close();
                 mb_inds.close();
+                mbAdvantages.close();
                 logRatio.close();
                 ratio.close();
                 pgLoss1.close();
@@ -866,11 +908,15 @@ public class TrainingManager {
                 numTruncations,
                 averageRewards,
                 totalRewards,
+                lastBowSelectedSteps,
+                lastBowDrawingSteps,
+                lastBowFullyDrawnSteps,
+                lastShieldUsingSteps,
                 hw.gpuMemUsed(),
                 hw.javaNativeUsed()
             );
             LOGGER.info(
-                "Iteration {}, LR: {}, VLoss: {}, PLoss: {}, Entropy: {}, OldKL: {}, KL: {}, ClipFrac: {}, ExplVar: {}, IterTime: {}s, SPS: {}, AvgRewards: {}, TotRewards: {}",
+                "Iteration {}, LR: {}, VLoss: {}, PLoss: {}, Entropy: {}, OldKL: {}, KL: {}, ClipFrac: {}, ExplVar: {}, IterTime: {}s, SPS: {}, AvgRewards: {}, TotRewards: {}, BowSelected: {}, BowDrawing: {}, BowFull: {}, ShieldUsing: {}",
                 iteration,
                 learningRate,
                 valueLoss,
@@ -884,7 +930,11 @@ public class TrainingManager {
                 iterationTime,
                 sps,
                 averageRewards,
-                totalRewards
+                totalRewards,
+                lastBowSelectedSteps,
+                lastBowDrawingSteps,
+                lastBowFullyDrawnSteps,
+                lastShieldUsingSteps
             );
         } catch (Exception e) {
             LOGGER.error("Failed to log training metrics: {}", e.getMessage());
@@ -892,9 +942,27 @@ public class TrainingManager {
         LOGGER.memory();
 
         clipFracs.close();
+        nextValue.close();
+        lastGAELam.close();
         returns.close();
         bObs.close();
         bLogProbs.close();
+        bActions.close();
+        bDones.close();
+        bAdvantages.close();
+        bReturns.close();
+        bValues.close();
+        envinds.close();
+        flatinds.close();
+        if (vLoss != null) vLoss.close();
+        if (pgLoss != null) pgLoss.close();
+        if (entropyLoss != null) entropyLoss.close();
+        if (approxKl != null) approxKl.close();
+        if (oldApproxKl != null) oldApproxKl.close();
+        if (initialLSTMState != null) {
+            initialLSTMState.close();
+            initialLSTMState = null;
+        }
         // yPred.close();
         // yTrue.close();
 
@@ -910,6 +978,7 @@ public class TrainingManager {
         if (iteration % 500 == 0) {
             LOGGER.info("Cleaning up native memory...");
             System.gc();
+            Pointer.deallocateReferences();
         }
     }
 

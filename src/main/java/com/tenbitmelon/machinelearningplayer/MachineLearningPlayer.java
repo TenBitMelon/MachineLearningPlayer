@@ -42,9 +42,9 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
 
     static {
         System.setProperty("org.bytedeco.javacpp.pathsFirst", "true");
-        // System.setProperty("org.bytedeco.javacpp.nopointergc", "true");
+        System.setProperty("org.bytedeco.javacpp.nopointergc", "true");
         // System.setProperty("org.bytedeco.javacpp.maxbytes", "5G");
-        System.setProperty("org.bytedeco.javacpp.maxphysicalbytes", "8G");
+        System.setProperty("org.bytedeco.javacpp.maxphysicalbytes", "16G");
 
         // System.setProperty("org.bytedeco.javacpp.logger.debug", "true");
         // System.setProperty("org.bytedeco.javacpp.logger.level", "debug");

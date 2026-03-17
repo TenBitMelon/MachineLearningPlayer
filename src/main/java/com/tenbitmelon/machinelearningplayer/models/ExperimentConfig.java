@@ -8,7 +8,7 @@ public class ExperimentConfig {
     /**
      * The learning rate of the optimizer.
      */
-    public final float learningRate = 2e-4f;
+    public final float learningRate = 1.8e-4f;
     /**
      * Toggle learning rate annealing for policy and value networks.
      */
@@ -78,7 +78,7 @@ public class ExperimentConfig {
      * The checkpoint to start from.
      */
     @Nullable
-    public Integer startingCheckpoint = null;
+    public Integer startingCheckpoint = 3200;
 
     private ExperimentConfig() {}
 

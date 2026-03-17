@@ -286,9 +286,16 @@ public class MinecraftRL extends Module {
         Tensor heightFeatures = this.localHeightmapConv.forward(localHeightMapReshaped); // size (B, 16)
 
         Tensor remainingObs = observationTensor.narrow(1, 0, Observation.OFFSET_LOCAL_HEIGHT_MAP); // size (B, OBSERVATION_SPACE_SIZE - 49)
-        Tensor combinedObs = torch.cat(new TensorVector(remainingObs, heightFeatures), 1); // size (B, OBSERVATION_SPACE_SIZE - 49 + 16)
+        TensorVector combinedObsTensors = new TensorVector(remainingObs, heightFeatures);
+        Tensor combinedObs = torch.cat(combinedObsTensors, 1); // size (B, OBSERVATION_SPACE_SIZE - 49 + 16)
+        combinedObsTensors.close();
 
         Tensor hidden = this.network.forward(combinedObs); // size (B, 64)
+        localHeightMap.close();
+        localHeightMapReshaped.close();
+        heightFeatures.close();
+        remainingObs.close();
+        combinedObs.close();
 
         /*
         batch_size = lstm_state[0].shape[1]
@@ -604,13 +611,21 @@ public class MinecraftRL extends Module {
         Tensor slotLogProbs = slotProbs.logProb(slotAction);
 
         Tensor totalLogProbs = forwardMoveKeysLogProbs
-            .add_(strafingMoveKeysLogProbs)
+            .add(strafingMoveKeysLogProbs)
             .add_(yawLogProbs)
             .add_(pitchLogProbs)
             .add_(jumpKeyLogProbs)
             .add_(sprintSneakKeysLogProbs)
             .add_(attackUseItemLogProbs)
             .add_(slotLogProbs);
+        forwardMoveKeysLogProbs.close();
+        strafingMoveKeysLogProbs.close();
+        yawLogProbs.close();
+        pitchLogProbs.close();
+        jumpKeyLogProbs.close();
+        sprintSneakKeysLogProbs.close();
+        attackUseItemLogProbs.close();
+        slotLogProbs.close();
 
         /*
         entropy = x_probs.entropy() + y_probs.entropy() + rot_dist.entropy()
@@ -627,12 +642,20 @@ public class MinecraftRL extends Module {
 
         Tensor totalEntropy = forwardMoveKeysEntropy
             .add(strafingMoveKeysEntropy)
-            .add(yawEntropy)
-            .add(pitchEntropy)
-            .add(jumpKeyEntropy)
-            .add(sprintSneakKeysEntropy)
-            .add(attackUseItemEntropy)
-            .add(slotEntropy);
+            .add_(yawEntropy)
+            .add_(pitchEntropy)
+            .add_(jumpKeyEntropy)
+            .add_(sprintSneakKeysEntropy)
+            .add_(attackUseItemEntropy)
+            .add_(slotEntropy);
+        forwardMoveKeysEntropy.close();
+        strafingMoveKeysEntropy.close();
+        yawEntropy.close();
+        pitchEntropy.close();
+        jumpKeyEntropy.close();
+        sprintSneakKeysEntropy.close();
+        attackUseItemEntropy.close();
+        slotEntropy.close();
 
         /*
         return (
@@ -654,6 +677,14 @@ public class MinecraftRL extends Module {
         sprintSneakKeysProbs.close();
         attackUseItemProbs.close();
         slotProbs.close();
+        forwardMoveKeysAction.close();
+        strafingMoveKeysAction.close();
+        yawAction.close();
+        pitchAction.close();
+        jumpKeyAction.close();
+        sprintSneakKeysAction.close();
+        attackUseItemAction.close();
+        slotAction.close();
 
         action.retainReference();
         totalLogProbs.retainReference();
@@ -686,6 +717,7 @@ public class MinecraftRL extends Module {
         OutputArchive outputArchive = new OutputArchive();
         this.save(outputArchive);
         outputArchive.save_to("model_files/minecraft_rl_checkpoint_" + iteration + ".pt");
+        outputArchive.close();
     }
 
     public void loadCheckpoint(Integer iteration) {
@@ -696,6 +728,7 @@ public class MinecraftRL extends Module {
         inputArchive.load_from("model_files/minecraft_rl_checkpoint_" + iteration + ".pt");
         System.out.println("Loading MinecraftRL checkpoint from iteration " + iteration);
         this.load(inputArchive);
+        inputArchive.close();
 
     }
 

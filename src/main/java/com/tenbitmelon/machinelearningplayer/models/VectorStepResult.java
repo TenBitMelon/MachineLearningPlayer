@@ -6,7 +6,8 @@ import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
 public record VectorStepResult(Observation[] observations, double[] rewards, boolean[] terminated,
-                               boolean[] truncated) implements AutoCloseable {
+                               boolean[] truncated, int bowSelectedSteps, int bowDrawingSteps,
+                               int bowFullyDrawnSteps, int shieldUsingSteps) implements AutoCloseable {
     public int[] logicalOrTerminationsAndTruncations() {
         // stepResult.terminated() || stepResult.truncated();
         int[] ors = new int[terminated.length];
@@ -22,8 +23,9 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
             Tensor tensor = observation.tensor();
             tensorVector.push_back(tensor);
         }
-        return torch.stack(tensorVector, 0);  // Stack along batch dimension
-
+        Tensor stack = torch.stack(tensorVector, 0);  // Stack along batch dimension
+        tensorVector.close();
+        return stack;
     }
 
     public int numTruncations() {
@@ -44,6 +46,22 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
             }
         }
         return count;
+    }
+
+    public int bowSelectedSteps() {
+        return bowSelectedSteps;
+    }
+
+    public int bowDrawingSteps() {
+        return bowDrawingSteps;
+    }
+
+    public int bowFullyDrawnSteps() {
+        return bowFullyDrawnSteps;
+    }
+
+    public int shieldUsingSteps() {
+        return shieldUsingSteps;
     }
 
     @Override

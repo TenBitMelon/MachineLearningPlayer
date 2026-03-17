@@ -9,7 +9,11 @@ public record StepResult(
     float targetHealth,
     float damageTaken,
     float damageDealt,
-    double distanceToTarget
+    double distanceToTarget,
+    boolean bowSelected,
+    boolean bowDrawing,
+    boolean bowFullyDrawn,
+    boolean shieldUsing
 ) implements AutoCloseable {
     public int logicalOrTerminationAndTruncation() {
         return (terminated || truncated) ? 1 : 0;

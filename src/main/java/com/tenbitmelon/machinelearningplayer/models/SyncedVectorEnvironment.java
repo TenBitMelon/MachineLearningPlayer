@@ -68,6 +68,10 @@ public class SyncedVectorEnvironment {
         // LOGGER.debug("Post tick stepping in SyncedVectorEnvironment");
         Observation[] observations = new Observation[numEnvs];
         double[] rewards = new double[numEnvs];
+        int bowSelectedSteps = 0;
+        int bowDrawingSteps = 0;
+        int bowFullyDrawnSteps = 0;
+        int shieldUsingSteps = 0;
 
         for (int i = 0; i < numEnvs; i += 2) {
 
@@ -75,11 +79,19 @@ public class SyncedVectorEnvironment {
             rewards[i] = stepResult.reward();
             terminated[i] = stepResult.terminated();
             truncated[i] = stepResult.truncated();
+            bowSelectedSteps += stepResult.bowSelected() ? 1 : 0;
+            bowDrawingSteps += stepResult.bowDrawing() ? 1 : 0;
+            bowFullyDrawnSteps += stepResult.bowFullyDrawn() ? 1 : 0;
+            shieldUsingSteps += stepResult.shieldUsing() ? 1 : 0;
 
             StepResult oppositeStepResult = environments[i + 1].postTickStep();
             rewards[i + 1] = oppositeStepResult.reward();
             terminated[i + 1] = oppositeStepResult.terminated();
             truncated[i + 1] = oppositeStepResult.truncated();
+            bowSelectedSteps += oppositeStepResult.bowSelected() ? 1 : 0;
+            bowDrawingSteps += oppositeStepResult.bowDrawing() ? 1 : 0;
+            bowFullyDrawnSteps += oppositeStepResult.bowFullyDrawn() ? 1 : 0;
+            shieldUsingSteps += oppositeStepResult.shieldUsing() ? 1 : 0;
 
             assert terminated[i] == terminated[i + 1] : "Terminated flags do not match for opposite environments";
             assert truncated[i] == truncated[i + 1] : "Truncated flags do not match for opposite environments";
@@ -94,7 +106,16 @@ public class SyncedVectorEnvironment {
                 observations[i + 1] = oppositeStepResult.observation();
             }
         }
-        return new VectorStepResult(observations, rewards, terminated, truncated);
+        return new VectorStepResult(
+            observations,
+            rewards,
+            terminated,
+            truncated,
+            bowSelectedSteps,
+            bowDrawingSteps,
+            bowFullyDrawnSteps,
+            shieldUsingSteps
+        );
     }
 
     public boolean isReady() {

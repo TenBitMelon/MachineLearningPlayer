@@ -35,7 +35,12 @@ public class Normal implements AutoCloseable {
             return torch.normal(self.loc.expand(shape), self.scale.expand(shape))
      */
     public Tensor sample() {
-        return torch.normal(this.loc.expand(batch_shape), this.scale.expand(batch_shape));
+        Tensor expandedLoc = this.loc.expand(batch_shape);
+        Tensor expandedScale = this.scale.expand(batch_shape);
+        Tensor sample = torch.normal(expandedLoc, expandedScale);
+        expandedLoc.close();
+        expandedScale.close();
+        return sample;
     }
 
     /*
@@ -58,10 +63,24 @@ public class Normal implements AutoCloseable {
     public Tensor logProb(Tensor value) {
         Tensor var = scale.square();
         Tensor logScale = scale.log();
-
-        Tensor div = value.sub(loc).square().div(var.mul(new Scalar(2)));
+        Tensor diff = value.sub(loc);
+        Tensor squared = diff.square();
+        Tensor doubledVar = var.mul(new Scalar(2));
+        Tensor div = squared.div(doubledVar);
         double log = Math.log(Math.sqrt(2.0 * Math.PI));
-        return div.neg().sub(logScale).sub(new Scalar(log));
+        Tensor negDiv = div.neg();
+        Tensor shifted = negDiv.sub(logScale);
+        Tensor result = shifted.sub(new Scalar(log));
+
+        var.close();
+        logScale.close();
+        diff.close();
+        squared.close();
+        doubledVar.close();
+        div.close();
+        negDiv.close();
+        shifted.close();
+        return result;
     }
 
     /*
@@ -70,7 +89,12 @@ public class Normal implements AutoCloseable {
      */
 
     public Tensor entropy() {
-        return torch.log(scale).add(new Scalar(0.5)).add(new Scalar(0.5 * Math.log(2 * Math.PI)));
+        Tensor logScale = torch.log(scale);
+        Tensor shifted = logScale.add(new Scalar(0.5));
+        Tensor entropy = shifted.add(new Scalar(0.5 * Math.log(2 * Math.PI)));
+        logScale.close();
+        shifted.close();
+        return entropy;
     }
 
     @Override
