@@ -356,6 +356,7 @@ public class TrainingManager {
         environment.preTickStep(actionTensor);
 
         actionResult.close();
+        actionTensor.close();
 
         needsPostTickStep = true;
         scope.close();
@@ -850,96 +851,119 @@ public class TrainingManager {
 
         LOGGER.info("==================== Finished Epoch for Iteration:      {} ====================", iteration - 1);
 
+        if (iteration % 20 == 0) {
 
-        SystemStats.HardwareMetrics hw = SystemStats.snapshot(device.index());
+            SystemStats.HardwareMetrics hw = SystemStats.snapshot(device.index());
 
-        LOGGER.info("GPU: {}% | Mem: {} / {} | Temp: {}C",
-            hw.gpuUtil(),
-            SystemStats.formatBytes(hw.gpuMemUsed()),
-            SystemStats.formatBytes(hw.gpuMemTotal()),
-            hw.gpuTemp()
-        );
-        LOGGER.info("CPU: {}% | Heap: {} | Native(JNI): {}",
-            hw.cpuLoad(),
-            SystemStats.formatBytes(hw.javaHeapUsed()),
-            SystemStats.formatBytes(hw.javaNativeUsed(), 8)
-        );
-
-        try {
-            OptimizerOptions options = optimizer.param_groups().get(0).options();
-            double learningRate = options.get_lr();
-            options.close();
-
-            double valueLoss = vLoss.item().toDouble();
-            double policyLoss = pgLoss.item().toDouble();
-            double entropyLossDouble = entropyLoss.item().toDouble();
-
-            Double oldApproxKlVal = oldApproxKl.item().toDouble();
-            Double approxKlVal = approxKl.item().toDouble();
-            double clipfrac = clipFracs.div(new Scalar(numClipFracs)).item().toFloat();
-            double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
-            double sps = ((args.numEnvs * args.numSteps) / iterationTime);
-            double averageRewards = rewards.mean().item().toDouble();
-            double totalRewards = rewards.sum().item().toDouble();
-
-            lastValueLoss = valueLoss;
-            lastPolicyLoss = policyLoss;
-            lastApproxKl = approxKlVal;
-            lastClipFrac = clipfrac;
-            lastIterationTime = iterationTime;
-            lastSps = sps;
-            lastAverageRewards = averageRewards;
-            lastTotalRewards = totalRewards;
-
-            trainingLogger.logStep(
-                iteration,
-                learningRate,
-                valueLoss,
-                policyLoss,
-                entropyLossDouble,
-                oldApproxKlVal,
-                approxKlVal,
-                clipfrac,
-                // explainedVar,
-                0,
-                iterationTime,
-                sps,
-                numTerminations,
-                numTruncations,
-                averageRewards,
-                totalRewards,
-                lastBowSelectedSteps,
-                lastBowDrawingSteps,
-                lastBowFullyDrawnSteps,
-                lastShieldUsingSteps,
-                hw.gpuMemUsed(),
-                hw.javaNativeUsed()
+            LOGGER.info("GPU: {}% | Mem: {} / {} | Temp: {}C",
+                hw.gpuUtil(),
+                SystemStats.formatBytes(hw.gpuMemUsed()),
+                SystemStats.formatBytes(hw.gpuMemTotal()),
+                hw.gpuTemp()
             );
-            LOGGER.info(
-                "Iteration {}, LR: {}, VLoss: {}, PLoss: {}, Entropy: {}, OldKL: {}, KL: {}, ClipFrac: {}, ExplVar: {}, IterTime: {}s, SPS: {}, AvgRewards: {}, TotRewards: {}, BowSelected: {}, BowDrawing: {}, BowFull: {}, ShieldUsing: {}",
-                iteration,
-                learningRate,
-                valueLoss,
-                policyLoss,
-                entropyLossDouble,
-                oldApproxKlVal,
-                approxKlVal,
-                clipfrac,
-                // explainedVar,
-                0,
-                iterationTime,
-                sps,
-                averageRewards,
-                totalRewards,
-                lastBowSelectedSteps,
-                lastBowDrawingSteps,
-                lastBowFullyDrawnSteps,
-                lastShieldUsingSteps
+            LOGGER.info("CPU: {}% | Heap: {} | Native(JNI): {}",
+                hw.cpuLoad(),
+                SystemStats.formatBytes(hw.javaHeapUsed()),
+                SystemStats.formatBytes(hw.javaNativeUsed(), 8)
             );
-        } catch (Exception e) {
-            LOGGER.error("Failed to log training metrics: {}", e.getMessage());
+
+            try (PointerScope scopeLogger = new PointerScope()) {
+                OptimizerOptions options = optimizer.param_groups().get(0).options();
+                double learningRate = options.get_lr();
+                options.close();
+
+                double valueLoss = vLoss.item().toDouble();
+                double policyLoss = pgLoss.item().toDouble();
+                double entropyLossDouble = entropyLoss.item().toDouble();
+
+                Double oldApproxKlVal = oldApproxKl.item().toDouble();
+                Double approxKlVal = approxKl.item().toDouble();
+                double clipfrac = clipFracs.div(new Scalar(numClipFracs)).item().toFloat();
+                double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
+                double sps = ((args.numEnvs * args.numSteps) / iterationTime);
+                double averageRewards = rewards.mean().item().toDouble();
+                double totalRewards = rewards.sum().item().toDouble();
+
+                lastValueLoss = valueLoss;
+                lastPolicyLoss = policyLoss;
+                lastApproxKl = approxKlVal;
+                lastClipFrac = clipfrac;
+                lastIterationTime = iterationTime;
+                lastSps = sps;
+                lastAverageRewards = averageRewards;
+                lastTotalRewards = totalRewards;
+
+                trainingLogger.logStep(
+                    iteration,
+                    learningRate,
+                    valueLoss,
+                    policyLoss,
+                    entropyLossDouble,
+                    oldApproxKlVal,
+                    approxKlVal,
+                    clipfrac,
+                    // explainedVar,
+                    0,
+                    iterationTime,
+                    sps,
+                    numTerminations,
+                    numTruncations,
+                    averageRewards,
+                    totalRewards,
+                    lastBowSelectedSteps,
+                    lastBowDrawingSteps,
+                    lastBowFullyDrawnSteps,
+                    lastShieldUsingSteps,
+                    hw.gpuMemUsed(),
+                    hw.gpuMemTotal(),
+                    hw.gpuUtil(),
+                    hw.gpuTemp(),
+                    hw.torchAllocatedBytesCurrent(),
+                    hw.torchAllocatedBytesPeak(),
+                    hw.torchReservedBytesCurrent(),
+                    hw.torchReservedBytesPeak(),
+                    hw.torchActiveBytesCurrent(),
+                    hw.torchActiveBytesPeak(),
+                    hw.torchInactiveSplitBytesCurrent(),
+                    hw.torchInactiveSplitBytesPeak(),
+                    hw.torchRequestedBytesCurrent(),
+                    hw.torchRequestedBytesPeak(),
+                    hw.torchNumAllocRetries(),
+                    hw.torchNumOoms(),
+                    hw.javaNativeUsed(),
+                    hw.javaCppRegisteredBytes(),
+                    hw.javaCppRegisteredCount(),
+                    hw.javaHeapUsed(),
+                    hw.osAvailablePhysicalBytes(),
+                    hw.osTotalPhysicalBytes(),
+                    hw.javaCppDeallocatorThreadAlive()
+                );
+                LOGGER.info(
+                    "Iteration {}, LR: {}, VLoss: {}, PLoss: {}, Entropy: {}, OldKL: {}, KL: {}, ClipFrac: {}, ExplVar: {}, IterTime: {}s, SPS: {}, AvgRewards: {}, TotRewards: {}, BowSelected: {}, BowDrawing: {}, BowFull: {}, ShieldUsing: {}",
+                    iteration,
+                    learningRate,
+                    valueLoss,
+                    policyLoss,
+                    entropyLossDouble,
+                    oldApproxKlVal,
+                    approxKlVal,
+                    clipfrac,
+                    // explainedVar,
+                    0,
+                    iterationTime,
+                    sps,
+                    averageRewards,
+                    totalRewards,
+                    lastBowSelectedSteps,
+                    lastBowDrawingSteps,
+                    lastBowFullyDrawnSteps,
+                    lastShieldUsingSteps
+                );
+            } catch (Exception e) {
+                LOGGER.error("Failed to log training metrics: {}", e.getMessage());
+            }
+            LOGGER.memory();
         }
-        LOGGER.memory();
 
         clipFracs.close();
         nextValue.close();

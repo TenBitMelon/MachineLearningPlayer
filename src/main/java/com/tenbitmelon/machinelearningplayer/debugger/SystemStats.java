@@ -2,6 +2,7 @@ package com.tenbitmelon.machinelearningplayer.debugger;
 
 import com.sun.management.OperatingSystemMXBean;
 import org.bytedeco.javacpp.Pointer;
+import org.bytedeco.pytorch.Stat;
 import org.bytedeco.pytorch.cuda.DeviceStats;
 import org.bytedeco.pytorch.global.torch_cuda;
 
@@ -19,12 +20,30 @@ public class SystemStats {
 
         // 2. JavaCPP / Native Stats
         // "physicalBytes" tracks memory allocated via JavaCPP pointers (C++ heap)
-        long nativeUsed = Pointer.physicalBytes();
+        JavaCppDiagnostics.Snapshot javaCppSnapshot = JavaCppDiagnostics.snapshot();
+        long nativeUsed = javaCppSnapshot.physicalBytes();
 
         // 3. GPU Stats via PyTorch Allocator (Fast, accurate for Torch tensors)
         // Note: This only sees memory managed by PyTorch.
         DeviceStats torchStats = torch_cuda.getAllocator().getDeviceStats(deviceIndex);
-        long torchAllocated = torchStats.allocated_bytes().current();
+        Stat allocatedBytes = torchStats.allocated_bytes();
+        Stat reservedBytes = torchStats.reserved_bytes();
+        Stat activeBytes = torchStats.active_bytes();
+        Stat inactiveSplitBytes = torchStats.inactive_split_bytes();
+        Stat requestedBytes = torchStats.requested_bytes();
+
+        long torchAllocatedCurrent = allocatedBytes.current();
+        long torchAllocatedPeak = allocatedBytes.peak();
+        long torchReservedCurrent = reservedBytes.current();
+        long torchReservedPeak = reservedBytes.peak();
+        long torchActiveCurrent = activeBytes.current();
+        long torchActivePeak = activeBytes.peak();
+        long torchInactiveSplitCurrent = inactiveSplitBytes.current();
+        long torchInactiveSplitPeak = inactiveSplitBytes.peak();
+        long torchRequestedCurrent = requestedBytes.current();
+        long torchRequestedPeak = requestedBytes.peak();
+        long torchNumAllocRetries = torchStats.num_alloc_retries();
+        long torchNumOoms = torchStats.num_ooms();
 
         // 4. GPU Stats via nvidia-smi (Slower, but gets Utilization & Temp)
         long gpuTotal = 0;
@@ -55,9 +74,41 @@ public class SystemStats {
         }
 
         // Fallback: If nvidia-smi failed, use torch stats for 'used' (though it will be lower than actual VRAM usage)
-        if (gpuUsed == 0) gpuUsed = torchAllocated;
+        if (gpuUsed == 0) gpuUsed = torchReservedCurrent != 0 ? torchReservedCurrent : torchAllocatedCurrent;
 
-        return new HardwareMetrics(cpuLoad, heapUsed, nativeUsed, gpuUsed, gpuTotal, gpuUtil, gpuTemp);
+        allocatedBytes.close();
+        reservedBytes.close();
+        activeBytes.close();
+        inactiveSplitBytes.close();
+        requestedBytes.close();
+        torchStats.close();
+
+        return new HardwareMetrics(
+            cpuLoad,
+            heapUsed,
+            nativeUsed,
+            javaCppSnapshot.registeredBytes(),
+            javaCppSnapshot.registeredCount(),
+            javaCppSnapshot.availablePhysicalBytes(),
+            javaCppSnapshot.totalPhysicalBytes(),
+            javaCppSnapshot.deallocatorThreadAlive(),
+            gpuUsed,
+            gpuTotal,
+            gpuUtil,
+            gpuTemp,
+            torchAllocatedCurrent,
+            torchAllocatedPeak,
+            torchReservedCurrent,
+            torchReservedPeak,
+            torchActiveCurrent,
+            torchActivePeak,
+            torchInactiveSplitCurrent,
+            torchInactiveSplitPeak,
+            torchRequestedCurrent,
+            torchRequestedPeak,
+            torchNumAllocRetries,
+            torchNumOoms
+        );
     }
 
     public static String formatBytes(long bytes) {
@@ -78,9 +129,26 @@ public class SystemStats {
         double cpuLoad,
         long javaHeapUsed,
         long javaNativeUsed, // JavaCPP physical bytes
+        long javaCppRegisteredBytes,
+        long javaCppRegisteredCount,
+        long osAvailablePhysicalBytes,
+        long osTotalPhysicalBytes,
+        boolean javaCppDeallocatorThreadAlive,
         long gpuMemUsed,
         long gpuMemTotal,
         int gpuUtil,
-        int gpuTemp
+        int gpuTemp,
+        long torchAllocatedBytesCurrent,
+        long torchAllocatedBytesPeak,
+        long torchReservedBytesCurrent,
+        long torchReservedBytesPeak,
+        long torchActiveBytesCurrent,
+        long torchActiveBytesPeak,
+        long torchInactiveSplitBytesCurrent,
+        long torchInactiveSplitBytesPeak,
+        long torchRequestedBytesCurrent,
+        long torchRequestedBytesPeak,
+        long torchNumAllocRetries,
+        long torchNumOoms
     ) {}
 }

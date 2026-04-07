@@ -1,6 +1,7 @@
 package com.tenbitmelon.machinelearningplayer;
 
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
+import com.tenbitmelon.machinelearningplayer.debugger.JavaCppDiagnostics;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.Logger;
 import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
@@ -42,7 +43,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
 
     static {
         System.setProperty("org.bytedeco.javacpp.pathsFirst", "true");
-        System.setProperty("org.bytedeco.javacpp.nopointergc", "true");
+        // System.setProperty("org.bytedeco.javacpp.noPointerGC", "false");
         // System.setProperty("org.bytedeco.javacpp.maxbytes", "5G");
         System.setProperty("org.bytedeco.javacpp.maxphysicalbytes", "16G");
 
@@ -85,6 +86,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
 
         LOGGER = new Logger();
         LOGGER.setEnabled(Level.DEBUG, false);
+        LOGGER.info("JavaCPP config: {}", JavaCppDiagnostics.describeConfiguration());
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(this, this);

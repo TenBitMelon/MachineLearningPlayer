@@ -48,12 +48,18 @@ public class Logger {
         StackTraceElement stackTraceElement = Thread.currentThread().getStackTrace()[2];
         DeviceStats deviceStats = torch_cuda.getAllocator().getDeviceStats(device.index());
         long nativeUsed = Pointer.physicalBytes(); // in bytes
-        log(Level.INFO, "T:{}, C:{} L:{}, A:{}, N:{}",
+        JavaCppDiagnostics.Snapshot diagnostics = JavaCppDiagnostics.snapshot();
+        log(Level.INFO, "T:{}, C:{} L:{}, A:{}, N:{}, R:{}, RC:{}, AP:{}, TP:{}, DT:{}",
             System.currentTimeMillis(),
             stackTraceElement.getClassName(),
             stackTraceElement.getLineNumber(),
             deviceStats.allocated_bytes().current(), // in bytes
-            nativeUsed
+            nativeUsed,
+            diagnostics.registeredBytes(),
+            diagnostics.registeredCount(),
+            diagnostics.availablePhysicalBytes(),
+            diagnostics.totalPhysicalBytes(),
+            diagnostics.deallocatorThreadAlive()
         );
 
     }
