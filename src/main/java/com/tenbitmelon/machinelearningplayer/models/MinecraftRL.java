@@ -732,6 +732,23 @@ public class MinecraftRL extends Module {
 
     }
 
+
+    public void copyParametersFrom(MinecraftRL other) {
+        AutogradState.get_tls_state().set_grad_mode(false);
+
+        try (TensorVector parameters = this.parameters(); TensorVector otherPrams = other.parameters()) {
+            if (parameters.size() != otherPrams.size()) {
+                throw new IllegalArgumentException("Models have different number of parameters");
+            }
+
+            for (long i = 0; i < parameters.size(); i++) {
+                parameters.get(i).copy_(otherPrams.get(i));
+            }
+        } finally {
+            AutogradState.get_tls_state().set_grad_mode(true);
+        }
+    }
+
     /**
      * Holds the state of an LSTM layer.
      * <p>

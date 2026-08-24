@@ -78,7 +78,7 @@ public class ExperimentConfig {
      * The checkpoint to start from.
      */
     @Nullable
-    public Integer startingCheckpoint = 10000;
+    public Integer startingCheckpoint = null;
 
     private ExperimentConfig() {}
 

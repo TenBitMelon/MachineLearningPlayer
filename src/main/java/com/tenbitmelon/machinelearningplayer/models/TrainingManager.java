@@ -107,12 +107,12 @@ public class TrainingManager {
         device = new Device("cuda:0");
         trainingLogger = new TrainingLogger(args, "logs/training");
 
-        environment = new SyncedVectorEnvironment(args);
-
         model = new MinecraftRL(device);
         model.loadCheckpoint(args.startingCheckpoint);
         model.to(device, false);
         modelParameters = model.parameters();
+
+        environment = new SyncedVectorEnvironment(args, device, model);
 
         adamOptions = new AdamOptions(args.learningRate);
         optimizer = new Adam(modelParameters, adamOptions);
@@ -880,7 +880,7 @@ public class TrainingManager {
                 Double approxKlVal = approxKl.item().toDouble();
                 double clipfrac = clipFracs.div(new Scalar(numClipFracs)).item().toFloat();
                 double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
-                double sps = ((args.numEnvs * args.numSteps) / iterationTime);
+                double sps = ((args.batchSize) / iterationTime);
                 double averageRewards = rewards.mean().item().toDouble();
                 double totalRewards = rewards.sum().item().toDouble();
 

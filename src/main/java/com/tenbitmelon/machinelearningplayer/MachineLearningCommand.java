@@ -324,10 +324,7 @@ public class MachineLearningCommand {
                 sender.sendPlainMessage("Number of Steps: " + config.numSteps);
                 sender.sendPlainMessage("The number of steps to run in each environment per policy rollout.");
                 return Command.SINGLE_SUCCESS;
-            }).then(Commands.argument("value", IntegerArgumentType.integer()).executes(ctx -> {
-                config.numSteps = ctx.getArgument("value", Integer.class);
-                return Command.SINGLE_SUCCESS;
-            })))
+            }))
             .then(Commands.literal("batchSize").executes(ctx -> {
                 CommandSender sender = ctx.getSource().getSender();
                 sender.sendPlainMessage("Batch Size: " + config.batchSize);
