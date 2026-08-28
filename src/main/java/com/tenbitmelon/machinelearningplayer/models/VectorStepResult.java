@@ -7,17 +7,18 @@ import org.bytedeco.pytorch.global.torch;
 
 public record VectorStepResult(Observation[] observations, double[] rewards, boolean[] terminated,
                                boolean[] truncated, int bowSelectedSteps, int bowDrawingSteps,
-                               int bowFullyDrawnSteps, int shieldUsingSteps) implements AutoCloseable {
-    public int[] logicalOrTerminationsAndTruncations() {
-        // stepResult.terminated() || stepResult.truncated();
-        int[] ors = new int[terminated.length];
-        for (int i = 0; i < terminated.length; i++) {
-            ors[i] = terminated[i] || truncated[i] ? 1 : 0;
-        }
-        return ors;
-    }
+                               int bowFullyDrawnSteps, int shieldUsingSteps,
+                               Tensor nextValuePreReset) implements AutoCloseable {
+    // public int[] logicalOrTerminationsAndTruncations() {
+    //     // stepResult.terminated() || stepResult.truncated();
+    //     int[] ors = new int[terminated.length];
+    //     for (int i = 0; i < terminated.length; i++) {
+    //         ors[i] = terminated[i] || truncated[i] ? 1 : 0;
+    //     }
+    //     return ors;
+    // }
 
-    public Tensor observationsTensor() {
+    static Tensor createObservationTensor(Observation[] observations) {
         TensorVector tensorVector = new TensorVector();
         for (Observation observation : observations) {
             Tensor tensor = observation.tensor();
@@ -26,6 +27,10 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
         Tensor stack = torch.stack(tensorVector, 0);  // Stack along batch dimension
         tensorVector.close();
         return stack;
+    }
+
+    public Tensor observationsTensor() {
+        return createObservationTensor(observations);
     }
 
     public int numTruncations() {

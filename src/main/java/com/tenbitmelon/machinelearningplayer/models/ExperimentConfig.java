@@ -66,6 +66,10 @@ public class ExperimentConfig {
      */
     public int numSteps = 200;
     /**
+     * The number of steps to run in each environment before truncating the episode.
+     */
+    public int maxEnvironmentSteps = 600;
+    /**
      * The batch size (computed in runtime, e.g., numEnvs * numSteps).
      * Initialized to 0 or a sensible default, will be calculated later.
      */

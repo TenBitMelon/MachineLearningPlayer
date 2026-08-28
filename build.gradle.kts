@@ -28,13 +28,16 @@ repositories {
         name = "sonatype"
         url = uri("https://oss.sonatype.org/content/groups/public/")
     }
+    // Local jars copied from the gradle cache (originals removed from remote repos)
+    flatDir { dirs("libs") }
 }
 
 dependencies {
     paperweight.paperDevBundle("1.21.5-R0.1-SNAPSHOT")
 
     // javacpp-1.5.12-20250613.133933-85-windows-x86_64.jar
-    implementation("org.bytedeco:javacpp:1.5.12-20250613.133933-85:windows-x86_64")
+//    implementation("org.bytedeco:javacpp:1.5.12-20250613.133933-85:windows-x86_64")
+    implementation("org.bytedeco:javacpp:1.5.12:windows-x86_64")
 
     implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.193524-13")
     implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.193524-13:windows-x86_64-gpu")
@@ -49,6 +52,10 @@ dependencies {
 
     // mkl-2025.2-1.5.12-windows-x86_64.jar
     implementation("org.bytedeco:mkl:2025.2-1.5.12:windows-x86_64")
+
+    testImplementation(platform("org.junit:junit-bom:5.10.2"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks {
@@ -57,6 +64,13 @@ tasks {
     }
     javadoc {
         options.encoding = Charsets.UTF_8.name()
+    }
+    test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+            showStandardStreams = true
+        }
     }
 
     jar {

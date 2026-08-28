@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer;
 
+import com.mojang.brigadier.Command;
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.debugger.JavaCppDiagnostics;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
@@ -7,19 +8,24 @@ import com.tenbitmelon.machinelearningplayer.debugger.Logger;
 import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import io.papermc.paper.command.brigadier.Commands;
+import io.papermc.paper.command.brigadier.argument.resolvers.selector.EntitySelectorArgumentResolver;
 import io.papermc.paper.event.player.PlayerFailMoveEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import org.bukkit.*;
+import org.bukkit.craftbukkit.entity.CraftEntity;
 import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerVelocityEvent;
 import org.bukkit.event.world.WorldLoadEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -148,6 +154,21 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         ServerPlayer handle = ((CraftPlayer) e.getPlayer()).getHandle();
         if (handle instanceof Agent) {
             e.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerEntityInteract(PlayerInteractEntityEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) return;
+        Entity entity = event.getRightClicked();
+        Player player = event.getPlayer();
+        if (CURRENT_MODE == MachineLearningPlayer.Mode.EVALUATION) {
+            net.minecraft.world.entity.Entity handle = ((CraftEntity) entity).getHandle();
+            if (!(handle instanceof LivingEntity)) {
+                player.sendPlainMessage("Target must be a living entity.");
+            }
+            EvaluationManager.getEnvironment().setTarget((LivingEntity) handle);
+            player.sendPlainMessage("Set evaluation target to " + handle.getName());
         }
     }
 

@@ -87,3 +87,6 @@ http-client.private.env.json
 
 pytorch/
 libtorch/
+
+# Local jars
+libs/

@@ -4,15 +4,16 @@ import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import com.tenbitmelon.machinelearningplayer.environment.ResetResult;
 import com.tenbitmelon.machinelearningplayer.environment.StepResult;
+import org.bytedeco.pytorch.Device;
 import org.bytedeco.pytorch.Tensor;
+import org.bytedeco.pytorch.global.torch;
 
 import java.util.Arrays;
 
-public class SyncedVectorEnvironment {
+import static com.tenbitmelon.machinelearningplayer.models.TrainingManager.zerosLikeNumEnvs;
+import static com.tenbitmelon.machinelearningplayer.models.VectorStepResult.createObservationTensor;
 
-    // private final AutoresetMode autoresetMode;
-    private final boolean[] terminated;
-    private final boolean[] truncated;
+public class SyncedVectorEnvironment {
 
     private final int numEnvs;
     private final MinecraftEnvironment[] environments;
@@ -33,9 +34,6 @@ public class SyncedVectorEnvironment {
                 environments[i - 1].setTarget(environments[i].agent);
             }
         }
-
-        this.terminated = new boolean[numEnvs];
-        this.truncated = new boolean[numEnvs];
     }
 
     public Observation[] getObservation() {
@@ -50,8 +48,6 @@ public class SyncedVectorEnvironment {
         for (int i = 0; i < numEnvs; i++) {
             ResetResult resetResult = environments[i].reset();
             observations[i] = resetResult.observation();
-            terminated[i] = false;
-            truncated[i] = false;
         }
         return new VectorResetResult(observations);
     }
@@ -64,10 +60,14 @@ public class SyncedVectorEnvironment {
         }
     }
 
-    public VectorStepResult postTickStep() {
+    public VectorStepResult postTickStep(MinecraftRL model, MinecraftRL.LSTMState nextLstmState, Device device) {
         // LOGGER.debug("Post tick stepping in SyncedVectorEnvironment");
         Observation[] observations = new Observation[numEnvs];
         double[] rewards = new double[numEnvs];
+
+        boolean[] terminated = new boolean[numEnvs];
+        boolean[] truncated = new boolean[numEnvs];
+
         int bowSelectedSteps = 0;
         int bowDrawingSteps = 0;
         int bowFullyDrawnSteps = 0;
@@ -96,16 +96,24 @@ public class SyncedVectorEnvironment {
             assert terminated[i] == terminated[i + 1] : "Terminated flags do not match for opposite environments";
             assert truncated[i] == truncated[i + 1] : "Truncated flags do not match for opposite environments";
 
+            observations[i] = stepResult.observation();
+            observations[i + 1] = oppositeStepResult.observation();
+        }
+
+        Tensor observationTensor = createObservationTensor(observations).to(device, torch.ScalarType.Float);
+        
+        Tensor nextValuePreReset = model.getValue(observationTensor, nextLstmState, zerosLikeNumEnvs);
+        nextValuePreReset = nextValuePreReset.reshape(-1); // (numEnvs,1) -> (numEnvs,)
+
+        for (int i = 0; i < numEnvs; i += 2) {
             if (terminated[i] || truncated[i]) {
                 ResetResult resetResult = environments[i].reset();
                 observations[i] = resetResult.observation();
                 ResetResult oppositeResetResult = environments[i + 1].reset();
                 observations[i + 1] = oppositeResetResult.observation();
-            } else {
-                observations[i] = stepResult.observation();
-                observations[i + 1] = oppositeStepResult.observation();
             }
         }
+
         return new VectorStepResult(
             observations,
             rewards,
@@ -114,7 +122,8 @@ public class SyncedVectorEnvironment {
             bowSelectedSteps,
             bowDrawingSteps,
             bowFullyDrawnSteps,
-            shieldUsingSteps
+            shieldUsingSteps,
+            nextValuePreReset
         );
     }
 

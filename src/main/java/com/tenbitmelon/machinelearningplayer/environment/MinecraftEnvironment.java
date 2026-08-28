@@ -238,7 +238,7 @@ public class MinecraftEnvironment {
         // My Velocity
         Vec3 agentVelocity = agent.getDeltaMovement();
         // TODO: Normalize based on max expected velocity
-        agentVelocity.multiply(1.0 / 5.0, 1.0 / 20.0, 1.0 / 5.0); // falling from 15 blocks is 26.41 m/s (8 blocks is 20.95 m/s)
+        agentVelocity = agentVelocity.multiply(1.0 / 5.0, 1.0 / 20.0, 1.0 / 5.0); // falling from 15 blocks is 26.41 m/s (8 blocks is 20.95 m/s)
 
         // Attack cooldown
         float attackStrengthTicker = agent.getAttackStrengthScale(0.0f); // not actually attack cooldown, but it's the damage scaling that I assume is 0-1
@@ -434,16 +434,14 @@ public class MinecraftEnvironment {
 
         reward += 0.05f * damageDealt;
         reward += -0.02f * damageTaken;
-        reward += -0.001f; // timestep cost
+        // reward += -0.001f; // timestep cost
 
-        // Holding use hint reward
-        reward += 0.00001f * ticksActionUse;
-
-        // Reward shooting a bow
-        if (lastSlotSelected == 1 && ticksActionUse == 20) {
-            // The bow is fully drawn at 20 ticks, so give a reward for that
-            reward += 0.1f;
-        }
+        
+        // // Reward shooting a bow
+        // if (lastSlotSelected == 1 && ticksActionUse == 20) {
+        //     // The bow is fully drawn at 20 ticks, so give a reward for that
+        //     reward += 0.1f;
+        // }
 
         if (myHealth <= 0 && targetHealth > 0) {
             // I LOST (I died, other is still up)
@@ -458,25 +456,26 @@ public class MinecraftEnvironment {
             reward += -5.0f; // Penalty for dying, but not as bad as losing outright
             terminated = true;
         }
+        //
+        // if (distanceTo < 3.0f) {
+        //     reward += 0.001f; // small reward for being close to the target
+        // }
+        // if (distanceTo > 1.5f) {
+        //     reward += deltaDistance * 0.001f;
+        // }
 
-        if (distanceTo < 3.0f) {
-            reward += 0.001f; // small reward for being close to the target
-        }
-        if (distanceTo > 1.5f) {
-            reward += deltaDistance * 0.001f;
-        }
-
-        boolean truncated = this.currentStep > this.args.numSteps;
-
-        if (truncated) {
-            if (myHealth > targetHealth) {
-                // I had more health when time ran out
-                reward += 0.5f;
-            } else if (myHealth < targetHealth) {
-                // Opponent had more health when time ran out
-                reward += -0.5f;
-            }
-        }
+        // I shouldn't be awarding because of truncation
+        boolean truncated = this.currentStep > this.args.maxEnvironmentSteps;
+        //
+        // if (truncated) {
+        //     if (myHealth > targetHealth) {
+        //         // I had more health when time ran out
+        //         reward += 0.5f;
+        //     } else if (myHealth < targetHealth) {
+        //         // Opponent had more health when time ran out
+        //         reward += -0.5f;
+        //     }
+        // }
 
         Observation observation = getObservation();
         // {

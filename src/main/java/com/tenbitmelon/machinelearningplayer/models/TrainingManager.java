@@ -31,6 +31,10 @@ public class TrainingManager {
     static public boolean sprint = false;
     public static Device device;
     public static int iteration = 1;
+    /** Shape: [numEnvs] */
+    public static Tensor zerosLikeNumEnvs;
+    /** Shape: [numEnvs] */
+    public static Tensor onesLikeNumEnvs;
     static ExperimentConfig args = ExperimentConfig.getInstance();
     // Pre computes:
     private static final Scalar SCALAR_GAMMA = new Scalar(args.gamma);
@@ -42,9 +46,9 @@ public class TrainingManager {
     private static final ScalarOptional SCALAR_1_ADD_CLIP_COEF = new ScalarOptional(new Scalar(1.0 + args.clipCoef));
     private static final ScalarOptional SCALAR_NEG_CLIP_COEF = new ScalarOptional(new Scalar(-args.clipCoef));
     private static final ScalarOptional SCALAR_OPT_CLIP_COEF = new ScalarOptional(new Scalar(args.clipCoef));
+    //
     private static final Scalar SCALAR_ENT_COEF = new Scalar(args.entCoef);
     private static final Scalar SCALAR_VF_COEF = new Scalar(args.vfCoef);
-    //
     static SyncedVectorEnvironment environment;
     static MinecraftRL model;
     static MinecraftRL.LSTMState initialLSTMState;
@@ -68,17 +72,21 @@ public class TrainingManager {
     /** Shape: [numSteps, numEnvs] */
     private static Tensor rewards;
     /** Shape: [numSteps, numEnvs] */
-    private static Tensor dones;
+    private static Tensor terminations;
+    /** Shape: [numSteps, numEnvs] */
+    private static Tensor truncations;
+    /** Shape: [numSteps, numEnvs] */
+    private static Tensor valuesPreReset;
     /** Shape: [numSteps, numEnvs] */
     private static Tensor values;
     /** Shape: [numEnvs] */
-    private static Tensor nextDone;
+    private static Tensor nextTermination;
+    /** Shape: [numEnvs] */
+    private static Tensor nextTruncation;
+    /** Shape: [numEnvs] */
+    private static Tensor nextValuePreReset;
     /** Shape: [numSteps, numEnvs] */
     private static Tensor advantages;
-    /** Shape: [numEnvs] */
-    private static Tensor zerosLikeNumEnvs;
-    /** Shape: [numEnvs] */
-    private static Tensor onesLikeNumEnvs;
     private static boolean runningInnerLoop = false;
     private static boolean needsPostTickStep = false;
     private static int numTerminations = 0;
@@ -112,7 +120,7 @@ public class TrainingManager {
         model.to(device, false);
         modelParameters = model.parameters();
 
-        environment = new SyncedVectorEnvironment(args, device, model);
+        environment = new SyncedVectorEnvironment(args);
 
         adamOptions = new AdamOptions(args.learningRate);
         optimizer = new Adam(modelParameters, adamOptions);
@@ -123,13 +131,17 @@ public class TrainingManager {
         actions = torch.zeros(new long[]{args.numSteps, args.numEnvs, Action.ACTION_SPACE_SIZE}, deviceTensorOptions);
         logprobs = torch.zeros(new long[]{args.numSteps, args.numEnvs}, deviceTensorOptions);
         rewards = torch.zeros(new long[]{args.numSteps, args.numEnvs}, deviceTensorOptions);
-        dones = torch.zeros(new long[]{args.numSteps, args.numEnvs}, deviceTensorOptions);
+        terminations = torch.zeros(new long[]{args.numSteps, args.numEnvs}, deviceTensorOptions);
+        valuesPreReset = torch.zeros(new long[]{args.numSteps, args.numEnvs}, deviceTensorOptions);
+        truncations = torch.zeros(new long[]{args.numSteps, args.numEnvs}, deviceTensorOptions);
         values = torch.zeros(new long[]{args.numSteps, args.numEnvs}, deviceTensorOptions);
 
-        nextDone = torch.zeros(new long[]{args.numEnvs}, deviceTensorOptions);
+        nextTermination = torch.zeros(new long[]{args.numEnvs}, deviceTensorOptions);
+        nextTruncation = torch.zeros(new long[]{args.numEnvs}, deviceTensorOptions);
         nextLstmState = new MinecraftRL.LSTMState(
             torch.zeros(new long[]{model.getLSTMLayers(), args.numEnvs, model.getLSTMHiddenSize()}, deviceTensorOptions),
             torch.zeros(new long[]{model.getLSTMLayers(), args.numEnvs, model.getLSTMHiddenSize()}, deviceTensorOptions));
+        nextValuePreReset = torch.zeros(new long[]{args.numEnvs}, deviceTensorOptions);
 
 
         // Allocate some stuff ahead of time
@@ -299,8 +311,14 @@ public class TrainingManager {
             slice.copy_(detached);
             detached.close();
         }
-        try (Tensor doneSlice = dones.get(step)) {
-            doneSlice.copy_(nextDone);
+        try (Tensor doneSlice = terminations.get(step)) {
+            doneSlice.copy_(nextTermination);
+        }
+        try (Tensor doneSlice = truncations.get(step)) {
+            doneSlice.copy_(nextTruncation);
+        }
+        try (Tensor valueSlice = valuesPreReset.get(step)) {
+            valueSlice.copy_(nextValuePreReset);
         }
 
         /*
@@ -314,7 +332,7 @@ public class TrainingManager {
 
         AutogradState.get_tls_state().set_grad_mode(false); // with torch.no_grad():
 
-        MinecraftRL.ActionAndValue actionResult = model.getActionAndValue(nextObs, nextLstmState, nextDone);
+        MinecraftRL.ActionAndValue actionResult = model.getActionAndValue(nextObs, nextLstmState, nextTermination);
         if (nextLstmState != null) nextLstmState.close();
         nextLstmState = actionResult.lstmState();
         nextLstmState.retainReference();
@@ -378,7 +396,7 @@ public class TrainingManager {
         rewards[step] = torch.tensor(reward).to(device).view(-1)
         next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
          */
-        VectorStepResult stepResult = environment.postTickStep();
+        VectorStepResult stepResult = environment.postTickStep(model, nextLstmState, device);
 
         nextObs.close();
         Tensor rawObs = stepResult.observationsTensor();
@@ -386,11 +404,18 @@ public class TrainingManager {
         nextObs.retainReference();
         rawObs.close();
 
-        nextDone.close();
-        Tensor cpuLogicalOr = Tensor.create(stepResult.logicalOrTerminationsAndTruncations());
-        nextDone = cpuLogicalOr.to(device, torch.ScalarType.Float);
-        cpuLogicalOr.close();
-        nextDone.retainReference();
+        nextTermination.close();
+        Tensor cpuTerminated = Tensor.create(stepResult.terminated());
+        nextTermination = cpuTerminated.to(device, torch.ScalarType.Float);
+        cpuTerminated.close();
+        nextTermination.retainReference();
+
+
+        nextTruncation.close();
+        Tensor cpuTruncated = Tensor.create(stepResult.truncated());
+        nextTruncation = cpuTruncated.to(device, torch.ScalarType.Float);
+        cpuTruncated.close();
+        nextTruncation.retainReference();
 
         Tensor cpuStepRewards = Tensor.create(stepResult.rewards());
         Tensor gpuStepRewards = cpuStepRewards.to(device, torch.ScalarType.Float);
@@ -402,9 +427,9 @@ public class TrainingManager {
         gpuStepRewards.close();
         cpuStepRewards.close();
 
-        // Moved theses parts onto the lines above
-        // nextObs = torch.tensor(nextObs).to(device, torch.ScalarType.Float);
-        // nextDone = torch.tensor(nextDone).to(device, torch.ScalarType.Float);
+        nextValuePreReset.close();
+        nextValuePreReset = stepResult.nextValuePreReset();
+        nextValuePreReset.retainReference();
 
         numTerminations += stepResult.numTerminations();
         numTruncations += stepResult.numTruncations();
@@ -450,7 +475,7 @@ public class TrainingManager {
         advantages = torch.zeros_like(rewards).to(device)
          */
 
-        Tensor nextValueRaw = model.getValue(nextObs, nextLstmState, nextDone);
+        Tensor nextValueRaw = model.getValue(nextObs, nextLstmState, nextTermination);
         Tensor nextValue = nextValueRaw.reshape(-1);
         nextValueRaw.close();
         advantages.zero_();
@@ -475,21 +500,29 @@ public class TrainingManager {
         for (int t = args.numSteps - 1; t >= 0; t--) {
             PointerScope loopScope = new PointerScope();
 
-            Tensor nextNonTerminal;
-            Tensor nextValues;
+            Tensor terminated;
+            Tensor truncated;
+            Tensor valueTrunc;
+            Tensor valueNormal;
             if (t == args.numSteps - 1) {
-                nextNonTerminal = onesLikeNumEnvs.sub(nextDone);
-                nextValues = nextValue;
+                terminated = nextTermination;
+                truncated = nextTruncation;
+                valueTrunc = nextValuePreReset;
+                valueNormal = nextValue;
             } else {
-                nextNonTerminal = onesLikeNumEnvs.sub(dones.get(t + 1));
-                nextValues = values.get(t + 1);
+                terminated = terminations.get(t + 1);
+                truncated = truncations.get(t + 1);
+                valueTrunc = valuesPreReset.get(t + 1);
+                valueNormal = values.get(t + 1);
             }
 
-            Tensor mul11 = nextValues.mul(nextNonTerminal);
-            Tensor mul1 = mul11.mul(SCALAR_GAMMA);
+            Tensor nextNonTerminal = onesLikeNumEnvs.sub(terminated);
+            Tensor condition = truncated.eq(SCALAR_ONE);
+            Tensor nextValues = torch.where(condition, valueTrunc, valueNormal).mul(nextNonTerminal);
+
+            Tensor mul1 = nextValues.mul(SCALAR_GAMMA);
             Tensor add1 = rewards.get(t).add(mul1);
             Tensor delta = add1.sub(values.get(t));
-
 
             Tensor mul22 = nextNonTerminal.mul(SCALAR_GAMMA_GAE_LAMBDA);
             Tensor mul2 = mul22.mul(lastGAELam);
@@ -498,7 +531,6 @@ public class TrainingManager {
             advantages.get(t).copy_(advantage);
             lastGAELam.copy_(advantage);
 
-            mul11.close();
             mul1.close();
             add1.close();
             delta.close();
@@ -506,12 +538,17 @@ public class TrainingManager {
             mul2.close();
             advantage.close();
             nextNonTerminal.close();
+            nextValues.close();
             if (t != args.numSteps - 1) {
-                nextValues.close();
+                terminated.close();
+                truncated.close();
+                valueTrunc.close();
+                valueNormal.close();
             }
 
             loopScope.close();
         }
+        nextValue.close();
 
         /*
         returns = advantages + values
@@ -539,7 +576,7 @@ public class TrainingManager {
         /// [numSteps*numEnvs, action_space]
         Tensor bActions = actions.reshape(-1, Action.ACTION_SPACE_SIZE);
         /// [numSteps*numEnvs]
-        Tensor bDones = dones.reshape(-1);
+        Tensor bDones = terminations.reshape(-1);
         /// [numSteps*numEnvs]
         Tensor bAdvantages = advantages.reshape(-1);
         /// [numSteps*numEnvs]
