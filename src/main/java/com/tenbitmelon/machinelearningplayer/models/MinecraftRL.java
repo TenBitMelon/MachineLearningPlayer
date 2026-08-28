@@ -13,6 +13,8 @@ import javax.annotation.Nullable;
 
 public class MinecraftRL extends Module {
 
+    private static final ScalarOptional SCALAR_n5 = new ScalarOptional(new Scalar(-5.0f));
+    private static final ScalarOptional SCALAR_2 = new ScalarOptional(new Scalar(2.0f));
     final SequentialImpl network;
     final LSTMImpl lstm;
     final LinearImpl actorForwardMoveKeys;
@@ -41,6 +43,8 @@ public class MinecraftRL extends Module {
             nn.Tanh(),
          */
 
+        int observationConv2dOutSize = 16;
+
         // Conv2d Input size = [B, 1, 7, 7]
         Conv2dOptions conv2dOptions = new Conv2dOptions(1, 4, new LongPointer(3, 3));
         // conv2dOptions.stride().put(1);
@@ -48,7 +52,7 @@ public class MinecraftRL extends Module {
         Conv2dImpl conv2d = new Conv2dImpl(conv2dOptions);
         TanhImpl convTanh1 = new TanhImpl();
         FlattenImpl flatten = new FlattenImpl();
-        LinearImpl convLinear = createLinearLayer(5 * 5 * 4, 16, device);
+        LinearImpl convLinear = createLinearLayer(5 * 5 * 4, observationConv2dOutSize, device);
         TanhImpl convTanh2 = new TanhImpl();
 
         SequentialImpl localHeightmapConv = new SequentialImpl();
@@ -71,7 +75,7 @@ public class MinecraftRL extends Module {
         )
         */
 
-        long observationSize = Observation.OBSERVATION_SPACE_SIZE - Observation.SIZE_LOCAL_HEIGHT_MAP + 16; // 16 is the output size of the local heightmap conv layers
+        long observationSize = Observation.OBSERVATION_SPACE_SIZE - Observation.SIZE_LOCAL_HEIGHT_MAP + observationConv2dOutSize; // 16 is the output size of the local heightmap conv layers
 
         LinearImpl networkLinear1 = createLinearLayer(observationSize, 64, device);
         TanhImpl networkTanh1 = new TanhImpl();
@@ -450,13 +454,13 @@ public class MinecraftRL extends Module {
 
         Tensor yMeanForward = this.yawMean.forward(hidden);
         Tensor yawMean = yMeanForward.squeeze(-1); // (batch, 1) -> (batch,)
-        Tensor yawStd = torch.exp(this.yawLogSTD);
+        Tensor yawStd = torch.exp(torch.clamp(this.yawLogSTD, SCALAR_n5, SCALAR_2));
         Normal yawDist = new Normal(yawMean, yawStd);
         yMeanForward.close();
 
         Tensor pitchMeanForward = this.pitchMean.forward(hidden);
         Tensor pitchMean = pitchMeanForward.squeeze(-1); // (batch, 1) -> (batch,)
-        Tensor pitchStd = torch.exp(this.pitchLogSTD);
+        Tensor pitchStd = torch.exp(torch.clamp(this.pitchLogSTD, SCALAR_n5, SCALAR_2));
         Normal pitchDist = new Normal(pitchMean, pitchStd);
         pitchMeanForward.close();
 

@@ -144,6 +144,7 @@ public class Agent extends ServerPlayer {
         observationSectionControls.add(new TextControl("Opponent Vec", tensorString(observation.opponentDirectionVec())));
         observationSectionControls.add(new TextControl("Opponent Distance", tensorString(observation.opponentDistance())));
         observationSectionControls.add(new TextControl("Opponent Velocity Vec", tensorString(observation.opponentVelocityVec())));
+        observationSectionControls.add(new TextControl("Opponent Look Direction Vec", tensorString(observation.opponentLookDirectionVec())));
         observationSectionControls.add(new TextControl("Attack Cooldown", tensorString(observation.attackCooldown())));
         observationSectionControls.add(new TextControl("Health", this.getHealth() + "/" + this.getMaxHealth()));
 

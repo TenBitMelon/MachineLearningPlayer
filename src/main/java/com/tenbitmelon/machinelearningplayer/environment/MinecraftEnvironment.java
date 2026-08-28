@@ -1,8 +1,10 @@
 package com.tenbitmelon.machinelearningplayer.environment;
 
+import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
+import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
@@ -20,6 +22,7 @@ import org.bytedeco.pytorch.Tensor;
 
 import java.util.concurrent.CompletableFuture;
 
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
 import static com.tenbitmelon.machinelearningplayer.util.Utils.*;
 
@@ -233,10 +236,14 @@ public class MinecraftEnvironment {
         Vec3 opponentVelocity = targetEntity.getDeltaMovement();
         opponentVelocity = opponentVelocity.yRot(yawRadians);
 
+        // Opponent look direction in agent-local angle space (forward relative to the agent)
+        Vec3 opponentLookDirectionLocalSpace = targetEntity.getLookAngle().yRot(yawRadians);
+
         // My Velocity
         Vec3 agentVelocity = agent.getDeltaMovement();
         // TODO: Normalize based on max expected velocity
         agentVelocity = agentVelocity.multiply(1.0 / 5.0, 1.0 / 20.0, 1.0 / 5.0); // falling from 15 blocks is 26.41 m/s (8 blocks is 20.95 m/s)
+        agentVelocity = agentVelocity.yRot(yawRadians);
 
         // Attack cooldown
         float attackStrengthTicker = agent.getAttackStrengthScale(0.0f); // not actually attack cooldown, but it's the damage scaling that I assume is 0-1
@@ -256,16 +263,12 @@ public class MinecraftEnvironment {
                 int worldX = (int) (agent.getX() + vec.x);
                 int worldZ = (int) (agent.getZ() + vec.z);
 
-                int envX = worldX - posX;
-                int envZ = worldZ - posZ;
-
-                if (envX < 0 || envX >= 32 || envZ < 0 || envZ >= 32) {
-                    localHeightMap[x * 7 + z] = 1.0f; // Default value for out-of-bounds
-                    continue;
-                }
+                // Clamp to the generated area, extending the boundary height into out-of-bounds cells
+                int envX = Math.max(0, Math.min(31, worldX - posX));
+                int envZ = Math.max(0, Math.min(31, worldZ - posZ));
 
                 // Get the height of the block at this world coordinate
-                int blockY = heightMap[worldX - posX][worldZ - posZ]; // Use modulo to wrap around the height map
+                int blockY = heightMap[envX][envZ];
                 float relativeHeight = (float) (blockY - agent.getY());
                 localHeightMap[x * 7 + z] = relativeHeight / 10.0f; // Normalize by expected max relative height
             }
@@ -282,6 +285,7 @@ public class MinecraftEnvironment {
             opponentDirectionLocalSpace,
             opponentDistance,
             opponentVelocity,
+            opponentLookDirectionLocalSpace,
             localHeightMap
         );
 
@@ -302,13 +306,13 @@ public class MinecraftEnvironment {
         double minRadius = 3.0;
         double maxRadius = 8.0;
 
-        // if (CURRENT_MODE == MachineLearningPlayer.Mode.TRAINING && TrainingManager.iteration < 5000) {
-        //     minRadius += 1.0 / 3000.0 * TrainingManager.iteration;
-        //     maxRadius += 6.0 / 3000.0 * TrainingManager.iteration;
-        // } else {
-        //     minRadius = 3.0;
-        //     maxRadius = 8.0;
-        // }
+        if (CURRENT_MODE == MachineLearningPlayer.Mode.TRAINING && TrainingManager.iteration < 5000) {
+            minRadius += 1.0 / 3000.0 * TrainingManager.iteration;
+            maxRadius += 6.0 / 3000.0 * TrainingManager.iteration;
+        } else {
+            minRadius = 3.0;
+            maxRadius = 8.0;
+        }
 
 
         double[] randomPointInCircle = getRandomPointInCircle(minRadius, maxRadius);

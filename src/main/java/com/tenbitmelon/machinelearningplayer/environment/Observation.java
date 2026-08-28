@@ -16,6 +16,7 @@ public class Observation implements AutoCloseable {
     public static final int SIZE_OPPONENT_DIRECTION_VEC = 3;
     public static final int SIZE_OPPONENT_DISTANCE = 1;
     public static final int SIZE_OPPONENT_VELOCITY_VEC = 3;
+    public static final int SIZE_OPPONENT_LOOK_DIRECTION_VEC = 3;
     public static final int OFFSET_PITCH = 0;
     public static final int SIZE_LOCAL_HEIGHT_MAP = 7 * 7; // 7x7 grid of blocks around the agent, each block is represented by its height relative to the agent's feet
     public static final int OFFSET_SPRINTING = OFFSET_PITCH + SIZE_PITCH;
@@ -27,13 +28,14 @@ public class Observation implements AutoCloseable {
     public static final int OFFSET_OPPONENT_DIRECTION_VEC = OFFSET_VELOCITY_VEC + SIZE_VELOCITY_VEC;
     public static final int OFFSET_OPPONENT_DISTANCE = OFFSET_OPPONENT_DIRECTION_VEC + SIZE_OPPONENT_DIRECTION_VEC;
     public static final int OFFSET_OPPONENT_VELOCITY_VEC = OFFSET_OPPONENT_DISTANCE + SIZE_OPPONENT_DISTANCE;
-    public static final int OFFSET_LOCAL_HEIGHT_MAP = OFFSET_OPPONENT_VELOCITY_VEC + SIZE_OPPONENT_VELOCITY_VEC;
+    public static final int OFFSET_OPPONENT_LOOK_DIRECTION_VEC = OFFSET_OPPONENT_VELOCITY_VEC + SIZE_OPPONENT_VELOCITY_VEC;
+    public static final int OFFSET_LOCAL_HEIGHT_MAP = OFFSET_OPPONENT_LOOK_DIRECTION_VEC + SIZE_OPPONENT_LOOK_DIRECTION_VEC;
 
     public static final int OBSERVATION_SPACE_SIZE = OFFSET_LOCAL_HEIGHT_MAP + SIZE_LOCAL_HEIGHT_MAP;
 
     final Tensor data;
 
-    public Observation(float pitch, boolean sprinting, boolean sneaking, boolean onGround, float attackCooldown, float health, Vec3 velocity, Vec3 opponentDirectionVec, float opponentDistance, Vec3 opponentVelocityVec, float[] localHeightMap) {
+    public Observation(float pitch, boolean sprinting, boolean sneaking, boolean onGround, float attackCooldown, float health, Vec3 velocity, Vec3 opponentDirectionVec, float opponentDistance, Vec3 opponentVelocityVec, Vec3 opponentLookDirectionVec, float[] localHeightMap) {
         float[] observationData = new float[Observation.OBSERVATION_SPACE_SIZE];
         observationData[OFFSET_PITCH] = pitch;
         observationData[OFFSET_SPRINTING] = sprinting ? 1.0f : 0.0f;
@@ -51,6 +53,9 @@ public class Observation implements AutoCloseable {
         observationData[OFFSET_OPPONENT_VELOCITY_VEC] = (float) opponentVelocityVec.x;
         observationData[OFFSET_OPPONENT_VELOCITY_VEC + 1] = (float) opponentVelocityVec.y;
         observationData[OFFSET_OPPONENT_VELOCITY_VEC + 2] = (float) opponentVelocityVec.z;
+        observationData[OFFSET_OPPONENT_LOOK_DIRECTION_VEC] = (float) opponentLookDirectionVec.x;
+        observationData[OFFSET_OPPONENT_LOOK_DIRECTION_VEC + 1] = (float) opponentLookDirectionVec.y;
+        observationData[OFFSET_OPPONENT_LOOK_DIRECTION_VEC + 2] = (float) opponentLookDirectionVec.z;
         System.arraycopy(localHeightMap, 0, observationData, OFFSET_LOCAL_HEIGHT_MAP, SIZE_LOCAL_HEIGHT_MAP);
 
         this.data = torch.tensor(observationData);
@@ -69,7 +74,7 @@ public class Observation implements AutoCloseable {
 
     /**
      * Pitch:
-     * - Shape: (2,)
+     * - Shape: (1,)
      */
     public Tensor pitch() {
         return data.narrow(0, OFFSET_PITCH, SIZE_PITCH); // (OBSERVATION_SPACE_SIZE,) -> (1,)
@@ -122,6 +127,14 @@ public class Observation implements AutoCloseable {
      */
     public Tensor opponentVelocityVec() {
         return data.narrow(0, OFFSET_OPPONENT_VELOCITY_VEC, SIZE_OPPONENT_VELOCITY_VEC); // (OBSERVATION_SPACE_SIZE,) -> (3,)
+    }
+
+    /**
+     * Opponent Look Direction Vec (in agent-local angle space):
+     * - Shape: (3,)
+     */
+    public Tensor opponentLookDirectionVec() {
+        return data.narrow(0, OFFSET_OPPONENT_LOOK_DIRECTION_VEC, SIZE_OPPONENT_LOOK_DIRECTION_VEC); // (OBSERVATION_SPACE_SIZE,) -> (3,)
     }
 
     /**
