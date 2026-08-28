@@ -89,4 +89,29 @@ public class ExperimentConfig {
     public static ExperimentConfig getInstance() {
         return config;
     }
+
+    @Override
+    public String toString() {
+        return "ExperimentConfig{" +
+            "learningRate=" + learningRate +
+            ", annealLr=" + annealLr +
+            ", gamma=" + gamma +
+            ", gaeLambda=" + gaeLambda +
+            ", numMinibatches=" + numMinibatches +
+            ", updateEpochs=" + updateEpochs +
+            ", normAdv=" + normAdv +
+            ", clipCoef=" + clipCoef +
+            ", clipVloss=" + clipVloss +
+            ", entCoef=" + entCoef +
+            ", vfCoef=" + vfCoef +
+            ", maxGradNorm=" + maxGradNorm +
+            ", targetKl=" + targetKl +
+            ", numEnvs=" + numEnvs +
+            ", numSteps=" + numSteps +
+            ", maxEnvironmentSteps=" + maxEnvironmentSteps +
+            ", batchSize=" + batchSize +
+            ", numIterations=" + numIterations +
+            ", startingCheckpoint=" + startingCheckpoint +
+            '}';
+    }
 }

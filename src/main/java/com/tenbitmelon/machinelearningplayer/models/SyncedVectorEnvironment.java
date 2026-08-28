@@ -2,7 +2,6 @@ package com.tenbitmelon.machinelearningplayer.models;
 
 import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
-import com.tenbitmelon.machinelearningplayer.environment.ResetResult;
 import com.tenbitmelon.machinelearningplayer.environment.StepResult;
 import org.bytedeco.pytorch.Device;
 import org.bytedeco.pytorch.Tensor;
@@ -12,6 +11,7 @@ import java.util.Arrays;
 
 import static com.tenbitmelon.machinelearningplayer.models.TrainingManager.zerosLikeNumEnvs;
 import static com.tenbitmelon.machinelearningplayer.models.VectorStepResult.createObservationTensor;
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class SyncedVectorEnvironment {
 
@@ -46,9 +46,12 @@ public class SyncedVectorEnvironment {
         Observation[] observations = new Observation[numEnvs];
 
         for (int i = 0; i < numEnvs; i++) {
-            ResetResult resetResult = environments[i].reset();
-            observations[i] = resetResult.observation();
+            environments[i].reset();
         }
+        for (int i = 0; i < numEnvs; i++) {
+            observations[i] = environments[i].getObservation();
+        }
+
         return new VectorResetResult(observations);
     }
 
@@ -101,16 +104,16 @@ public class SyncedVectorEnvironment {
         }
 
         Tensor observationTensor = createObservationTensor(observations).to(device, torch.ScalarType.Float);
-        
+
         Tensor nextValuePreReset = model.getValue(observationTensor, nextLstmState, zerosLikeNumEnvs);
         nextValuePreReset = nextValuePreReset.reshape(-1); // (numEnvs,1) -> (numEnvs,)
 
         for (int i = 0; i < numEnvs; i += 2) {
             if (terminated[i] || truncated[i]) {
-                ResetResult resetResult = environments[i].reset();
-                observations[i] = resetResult.observation();
-                ResetResult oppositeResetResult = environments[i + 1].reset();
-                observations[i + 1] = oppositeResetResult.observation();
+                environments[i].reset();
+                environments[i + 1].reset();
+                observations[i] = environments[i].getObservation();
+                observations[i + 1] = environments[i + 1].getObservation();
             }
         }
 

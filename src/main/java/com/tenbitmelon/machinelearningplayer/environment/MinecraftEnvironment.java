@@ -1,27 +1,25 @@
 package com.tenbitmelon.machinelearningplayer.environment;
 
-import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
 import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
-import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
-import net.kyori.adventure.text.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec2;
 import net.minecraft.world.phys.Vec3;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
+import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
 import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bytedeco.pytorch.Tensor;
 
 import java.util.concurrent.CompletableFuture;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.WORLD;
 import static com.tenbitmelon.machinelearningplayer.util.Utils.*;
 
@@ -292,7 +290,7 @@ public class MinecraftEnvironment {
         return observation;
     }
 
-    public ResetResult reset() {
+    public void reset() {
         this.currentStep = 0;
 
         // int[] coords = szudzikUnpairing(this.environmentId / 2);
@@ -343,8 +341,6 @@ public class MinecraftEnvironment {
         lastKnownDistanceToTarget = 0.0f;
         ticksActionUse = 0;
         lastSlotSelected = 0;
-
-        return new ResetResult(getObservation());
     }
 
     public void preTickStep(Tensor actionTensor) {
@@ -436,7 +432,7 @@ public class MinecraftEnvironment {
         reward += -0.02f * damageTaken;
         // reward += -0.001f; // timestep cost
 
-        
+
         // // Reward shooting a bow
         // if (lastSlotSelected == 1 && ticksActionUse == 20) {
         //     // The bow is fully drawn at 20 ticks, so give a reward for that

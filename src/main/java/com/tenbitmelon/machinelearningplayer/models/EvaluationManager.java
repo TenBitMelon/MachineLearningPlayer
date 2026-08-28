@@ -1,44 +1,37 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
-import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
-import com.tenbitmelon.machinelearningplayer.debugger.SystemStats;
-import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.*;
-import com.tenbitmelon.machinelearningplayer.environment.*;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.TextControl;
+import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.VariableControl;
+import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
+import com.tenbitmelon.machinelearningplayer.environment.Observation;
+import com.tenbitmelon.machinelearningplayer.environment.StepResult;
 import net.kyori.adventure.text.Component;
-import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.GameRules;
-import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
-import org.bukkit.craftbukkit.CraftServer;
 import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.craftbukkit.entity.CraftEntity;
 import org.bukkit.craftbukkit.inventory.CraftItemStack;
-import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Mob;
-import org.bukkit.event.player.PlayerGameModeChangeEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bytedeco.javacpp.PointerScope;
-import org.bytedeco.pytorch.*;
-import org.bytedeco.pytorch.cuda.DeviceStats;
+import org.bytedeco.pytorch.AutogradState;
+import org.bytedeco.pytorch.Device;
+import org.bytedeco.pytorch.Tensor;
+import org.bytedeco.pytorch.TensorOptions;
 import org.bytedeco.pytorch.global.torch;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.Set;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.*;
 import static com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment.getRandomPointInCircle;
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class EvaluationManager {
 
@@ -50,7 +43,7 @@ public class EvaluationManager {
     static MinecraftEnvironment environment;
     static MinecraftRL model;
     static MinecraftRL.LSTMState nextLstmState;
-    static ResetResult resetResult;
+    static Observation resetResult;
     static String logText = "";
     /** Shape: [numEnvs, Observation.OBSERVATION_SPACE_SIZE] */
     private static Tensor nextObs;
@@ -160,8 +153,9 @@ public class EvaluationManager {
 
         if (resetResult == null) {
             LOGGER.info("Initial environment reset for evaluation...");
-            resetResult = environment.reset();
-            nextObs = resetResult.observation().tensor().to(device, torch.ScalarType.Float);
+            environment.reset();
+            resetResult = environment.getObservation();
+            nextObs = resetResult.tensor().to(device, torch.ScalarType.Float);
             evaluationStartTime = System.currentTimeMillis();
         }
 
@@ -212,11 +206,10 @@ public class EvaluationManager {
             try {
                 StepResult stepResult = environment.postTickStep();
                 Observation observation = stepResult.observation();
-                ResetResult resetAfterTermination = null;
 
                 if (stepResult.terminated()) {
-                    resetAfterTermination = environment.reset();
-                    observation = resetAfterTermination.observation();
+                    environment.reset();
+                    observation = environment.getObservation();
 
                     double minRadius = 1.0;
                     double maxRadius = 1.0;
@@ -266,9 +259,6 @@ public class EvaluationManager {
                 updateEvaluationMetrics(stepResult);
 
                 currentStep++;
-                if (resetAfterTermination != null) {
-                    resetAfterTermination.close();
-                }
             } finally {
                 scope.close();
                 needsPostTickStep = false;

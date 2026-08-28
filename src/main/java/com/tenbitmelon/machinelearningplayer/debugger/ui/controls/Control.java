@@ -1,6 +1,5 @@
 package com.tenbitmelon.machinelearningplayer.debugger.ui.controls;
 
-import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.util.InteractionBuilder;
 import com.tenbitmelon.machinelearningplayer.util.Utils;
 import net.kyori.adventure.text.Component;

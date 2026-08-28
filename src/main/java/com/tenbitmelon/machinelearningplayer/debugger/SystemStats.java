@@ -1,7 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
 import com.sun.management.OperatingSystemMXBean;
-import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.pytorch.Stat;
 import org.bytedeco.pytorch.cuda.DeviceStats;
 import org.bytedeco.pytorch.global.torch_cuda;

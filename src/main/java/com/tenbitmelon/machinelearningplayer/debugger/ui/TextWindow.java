@@ -1,6 +1,5 @@
 package com.tenbitmelon.machinelearningplayer.debugger.ui;
 
-import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.util.TextDisplayBuilder;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;

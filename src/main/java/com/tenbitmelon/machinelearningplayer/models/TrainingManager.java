@@ -123,8 +123,8 @@ public class TrainingManager {
         environment = new SyncedVectorEnvironment(args);
 
         adamOptions = new AdamOptions(args.learningRate);
-        optimizer = new Adam(modelParameters, adamOptions);
         adamOptions.eps().put(1e-5);
+        optimizer = new Adam(modelParameters, adamOptions);
 
         TensorOptions deviceTensorOptions = new TensorOptions(device);
         observations = torch.zeros(new long[]{args.numSteps, args.numEnvs, Observation.OBSERVATION_SPACE_SIZE}, deviceTensorOptions);

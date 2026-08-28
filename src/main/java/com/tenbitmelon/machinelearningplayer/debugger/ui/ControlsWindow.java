@@ -1,6 +1,5 @@
 package com.tenbitmelon.machinelearningplayer.debugger.ui;
 
-import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.Control;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.TextControl;
 import com.tenbitmelon.machinelearningplayer.util.TextDisplayBuilder;

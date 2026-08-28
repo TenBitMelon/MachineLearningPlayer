@@ -11,10 +11,6 @@ import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
 
-import java.util.Arrays;
-
-import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
-
 public class MinecraftRL extends Module {
 
     final SequentialImpl network;

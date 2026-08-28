@@ -15,25 +15,19 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
 import io.papermc.paper.command.brigadier.argument.resolvers.selector.EntitySelectorArgumentResolver;
-import io.papermc.paper.command.brigadier.argument.resolvers.selector.PlayerSelectorArgumentResolver;
-import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
 import org.bukkit.*;
 import org.bukkit.command.CommandSender;
 import org.bukkit.craftbukkit.entity.CraftEntity;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.slf4j.event.Level;
 
 import java.lang.reflect.Field;
-import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 
-import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.*;
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 @SuppressWarnings("UnstableApiUsage")
 public class MachineLearningCommand {

@@ -1,6 +1,5 @@
 package com.tenbitmelon.machinelearningplayer.debugger;
 
-import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.ControlsWindow;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
@@ -11,7 +10,6 @@ import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import com.tenbitmelon.machinelearningplayer.util.Utils;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.World;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEntityEvent;

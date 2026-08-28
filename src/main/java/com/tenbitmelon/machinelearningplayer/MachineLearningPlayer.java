@@ -1,14 +1,12 @@
 package com.tenbitmelon.machinelearningplayer;
 
-import com.mojang.brigadier.Command;
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
-import com.tenbitmelon.machinelearningplayer.debugger.JavaCppDiagnostics;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
+import com.tenbitmelon.machinelearningplayer.debugger.JavaCppDiagnostics;
 import com.tenbitmelon.machinelearningplayer.debugger.Logger;
 import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.command.brigadier.argument.resolvers.selector.EntitySelectorArgumentResolver;
 import io.papermc.paper.event.player.PlayerFailMoveEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
@@ -34,7 +32,6 @@ import org.bytedeco.cuda.presets.cupti;
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.presets.javacpp;
 import org.bytedeco.openblas.presets.openblas;
-import org.bytedeco.pytorch.Device;
 import org.bytedeco.pytorch.presets.torch;
 import org.bytedeco.pytorch.presets.torch_cuda;
 import org.slf4j.event.Level;

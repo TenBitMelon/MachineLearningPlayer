@@ -2,8 +2,6 @@ package com.tenbitmelon.machinelearningplayer.models;
 
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import org.bytedeco.pytorch.Tensor;
-import org.bytedeco.pytorch.TensorVector;
-import org.bytedeco.pytorch.global.torch;
 
 import static com.tenbitmelon.machinelearningplayer.models.VectorStepResult.createObservationTensor;
 
