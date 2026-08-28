@@ -72,7 +72,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (2,)
      */
     public Tensor pitch() {
-        return data.narrow(0, OFFSET_PITCH, SIZE_PITCH);
+        return data.narrow(0, OFFSET_PITCH, SIZE_PITCH); // (OBSERVATION_SPACE_SIZE,) -> (1,)
     }
 
     /**
@@ -80,7 +80,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (1,)
      */
     public Tensor sprinting() {
-        return data.narrow(0, OFFSET_SPRINTING, SIZE_SPRINTING);
+        return data.narrow(0, OFFSET_SPRINTING, SIZE_SPRINTING); // (OBSERVATION_SPACE_SIZE,) -> (1,)
     }
 
     /**
@@ -88,7 +88,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (1,)
      */
     public Tensor sneaking() {
-        return data.narrow(0, OFFSET_SNEAKING, SIZE_SNEAKING);
+        return data.narrow(0, OFFSET_SNEAKING, SIZE_SNEAKING); // (OBSERVATION_SPACE_SIZE,) -> (1,)
     }
 
     /**
@@ -96,7 +96,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (1,)
      */
     public Tensor onGround() {
-        return data.narrow(0, OFFSET_ON_GROUND, SIZE_ON_GROUND);
+        return data.narrow(0, OFFSET_ON_GROUND, SIZE_ON_GROUND); // (OBSERVATION_SPACE_SIZE,) -> (1,)
     }
 
 
@@ -105,7 +105,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (3,)
      */
     public Tensor opponentDirectionVec() {
-        return data.narrow(0, OFFSET_OPPONENT_DIRECTION_VEC, SIZE_OPPONENT_DIRECTION_VEC);
+        return data.narrow(0, OFFSET_OPPONENT_DIRECTION_VEC, SIZE_OPPONENT_DIRECTION_VEC); // (OBSERVATION_SPACE_SIZE,) -> (3,)
     }
 
     /**
@@ -113,7 +113,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (1,)
      */
     public Tensor opponentDistance() {
-        return data.narrow(0, OFFSET_OPPONENT_DISTANCE, SIZE_OPPONENT_DISTANCE);
+        return data.narrow(0, OFFSET_OPPONENT_DISTANCE, SIZE_OPPONENT_DISTANCE); // (OBSERVATION_SPACE_SIZE,) -> (1,)
     }
 
     /**
@@ -121,7 +121,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (3,)
      */
     public Tensor opponentVelocityVec() {
-        return data.narrow(0, OFFSET_OPPONENT_VELOCITY_VEC, SIZE_OPPONENT_VELOCITY_VEC);
+        return data.narrow(0, OFFSET_OPPONENT_VELOCITY_VEC, SIZE_OPPONENT_VELOCITY_VEC); // (OBSERVATION_SPACE_SIZE,) -> (3,)
     }
 
     /**
@@ -129,7 +129,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (1,)
      */
     public Tensor attackCooldown() {
-        return data.narrow(0, OFFSET_ATTACK_COOLDOWN, SIZE_ATTACK_COOLDOWN);
+        return data.narrow(0, OFFSET_ATTACK_COOLDOWN, SIZE_ATTACK_COOLDOWN); // (OBSERVATION_SPACE_SIZE,) -> (1,)
     }
 
 
@@ -138,7 +138,7 @@ public class Observation implements AutoCloseable {
      * - Shape: (49,) representing a 7x7 grid of blocks around the agent, each block is represented by its height relative to the agent's feet
      */
     public Tensor localHeightMap() {
-        return data.narrow(0, OFFSET_LOCAL_HEIGHT_MAP, SIZE_LOCAL_HEIGHT_MAP);
+        return data.narrow(0, OFFSET_LOCAL_HEIGHT_MAP, SIZE_LOCAL_HEIGHT_MAP); // (OBSERVATION_SPACE_SIZE,) -> (49,)
     }
 
     /**

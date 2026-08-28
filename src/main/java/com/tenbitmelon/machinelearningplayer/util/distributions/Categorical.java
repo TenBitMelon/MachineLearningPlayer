@@ -38,9 +38,9 @@ public class Categorical implements AutoCloseable {
      */
 
     public Tensor sample() {
-        Tensor probs2d = this.probs.reshape(-1, this.numEvents);
-        Tensor samples2d = torch.multinomial(probs2d, 1, true, null).t();
-        Tensor reshaped = samples2d.reshape(batchSize);
+        Tensor probs2d = this.probs.reshape(-1, this.numEvents); // (batch..., numEvents) -> (prod(batch), numEvents)
+        Tensor samples2d = torch.multinomial(probs2d, 1, true, null).t(); // (batch, 1) -> (1, batch)
+        Tensor reshaped = samples2d.reshape(batchSize); // (1, batch) -> (batch,)
         probs2d.close();
         samples2d.close();
         return reshaped;
@@ -58,14 +58,14 @@ public class Categorical implements AutoCloseable {
 
     public Tensor logProb(Tensor value) {
         Tensor longValue = value.to(torch.ScalarType.Long);
-        Tensor unsqueezed = longValue.unsqueeze(-1);
+        Tensor unsqueezed = longValue.unsqueeze(-1); // (batch,) -> (batch, 1)
         TensorVector vector = new TensorVector(unsqueezed, this.logits);
         TensorVector broadcasted = torch.broadcast_tensors(vector);
         Tensor broadFirst = broadcasted.get(0);
         Tensor log_pmf = broadcasted.get(1);
         Tensor sliced = broadFirst.slice(-1, new LongOptional(0), new LongOptional(1), 1);
         Tensor gathered = log_pmf.gather(-1, sliced);
-        Tensor squeezed = gathered.squeeze(-1);
+        Tensor squeezed = gathered.squeeze(-1); // (batch, 1) -> (batch,)
 
         longValue.close();
         unsqueezed.close();

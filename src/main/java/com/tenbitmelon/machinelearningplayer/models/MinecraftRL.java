@@ -209,7 +209,7 @@ public class MinecraftRL extends Module {
         //     flattened.t_()
 
         if (rows < cols) {
-            flattened.t_(); // Transpose the tensor if rows < cols
+            flattened.t_(); // (rows, cols) -> (cols, rows)
             // long temp = rows;
             // rows = cols;
             // cols = temp;
@@ -236,7 +236,7 @@ public class MinecraftRL extends Module {
         //     q.t_()
 
         if (rows < cols) {
-            qGpu.t_(); // Transpose
+            qGpu.t_(); // (rows, cols) -> (cols, rows)
         }
 
         // with torch.no_grad():
@@ -278,16 +278,16 @@ public class MinecraftRL extends Module {
         hidden = self.network(observation)
          */
         if (observationTensor.dim() == 1) {
-            observationTensor = observationTensor.unsqueeze(0); // Add batch dimension if missing
+            observationTensor = observationTensor.unsqueeze(0); // (OBSERVATION_SPACE_SIZE,) -> (1, OBSERVATION_SPACE_SIZE)
         }
 
-        Tensor localHeightMap = observationTensor.narrow(1, Observation.OFFSET_LOCAL_HEIGHT_MAP, Observation.SIZE_LOCAL_HEIGHT_MAP); // size (B, 49)
-        Tensor localHeightMapReshaped = localHeightMap.reshape(-1, 1, 7, 7); // size (B, 1, 7, 7)
+        Tensor localHeightMap = observationTensor.narrow(1, Observation.OFFSET_LOCAL_HEIGHT_MAP, Observation.SIZE_LOCAL_HEIGHT_MAP); // (B, OBSERVATION_SPACE_SIZE) -> (B, 49)
+        Tensor localHeightMapReshaped = localHeightMap.reshape(-1, 1, 7, 7); // (B, 49) -> (B, 1, 7, 7)
         Tensor heightFeatures = this.localHeightmapConv.forward(localHeightMapReshaped); // size (B, 16)
 
-        Tensor remainingObs = observationTensor.narrow(1, 0, Observation.OFFSET_LOCAL_HEIGHT_MAP); // size (B, OBSERVATION_SPACE_SIZE - 49)
+        Tensor remainingObs = observationTensor.narrow(1, 0, Observation.OFFSET_LOCAL_HEIGHT_MAP); // (B, OBSERVATION_SPACE_SIZE) -> (B, OBSERVATION_SPACE_SIZE - 49)
         TensorVector combinedObsTensors = new TensorVector(remainingObs, heightFeatures);
-        Tensor combinedObs = torch.cat(combinedObsTensors, 1); // size (B, OBSERVATION_SPACE_SIZE - 49 + 16)
+        Tensor combinedObs = torch.cat(combinedObsTensors, 1); // (B, OBSERVATION_SPACE_SIZE - 49) + (B, 16) -> (B, OBSERVATION_SPACE_SIZE - 49 + 16)
         combinedObsTensors.close();
 
         Tensor hidden = this.network.forward(combinedObs); // size (B, 64)
@@ -306,8 +306,8 @@ public class MinecraftRL extends Module {
 
         Tensor startingHiddenState = lstmState.hiddenState();
         long batchSize = startingHiddenState.size(1); // batchSize
-        hidden = hidden.reshape(-1, batchSize, this.lstm.options().input_size().get()); // size (B, batchSize, input_size)
-        done = done.reshape(-1, batchSize); // size (B, batchSize)
+        hidden = hidden.reshape(-1, batchSize, this.lstm.options().input_size().get()); // (batchSize, 64) -> (1, batchSize, input_size)
+        done = done.reshape(-1, batchSize); // (batchSize,) -> (1, batchSize)
 
         long seqLen = hidden.size(0); // seqLen = B
 
@@ -337,10 +337,10 @@ public class MinecraftRL extends Module {
          */
         for (int i = 0; i < seqLen; i++) {
             Tensor h1 = hiddenList.get(i);
-            Tensor h = h1.unsqueeze(0); // size (1, batchSize, input_size)
+            Tensor h = h1.unsqueeze(0); // (batchSize, input_size) -> (1, batchSize, input_size)
             Tensor d1 = oneSubDoneList.get(i);
-            Tensor d = d1 // size (batchSize,)
-                .view(1, -1, 1); // Reshape to (1, batchSize, 1)
+            Tensor d = d1
+                .view(1, -1, 1); // (batchSize,) -> (1, batchSize, 1)
 
             Tensor newHiddenState = hiddenState.mul(d); // Hidden state size (1, batchSize, hidden_size)
             Tensor newCellState = cellState.mul(d); // Cell state size (1, batchSize, hidden_size)
@@ -370,7 +370,7 @@ public class MinecraftRL extends Module {
         new_hidden = torch.flatten(torch.cat(new_hidden), 0, 1)
          */
         Tensor cat = torch.cat(newHidden);
-        Tensor newHiddenTensor = torch.flatten(cat, 0, 1);
+        Tensor newHiddenTensor = torch.flatten(cat, 0, 1); // (seqLen, batchSize, input_size) -> (seqLen * batchSize, input_size)
         cat.close();
         for (int i = 0; i < newHidden.size(); i++) {
             newHidden.get(i).close();
@@ -453,13 +453,13 @@ public class MinecraftRL extends Module {
          */
 
         Tensor yMeanForward = this.yawMean.forward(hidden);
-        Tensor yawMean = yMeanForward.squeeze(-1); // Shape (batch,)
+        Tensor yawMean = yMeanForward.squeeze(-1); // (batch, 1) -> (batch,)
         Tensor yawStd = torch.exp(this.yawLogSTD);
         Normal yawDist = new Normal(yawMean, yawStd);
         yMeanForward.close();
 
         Tensor pitchMeanForward = this.pitchMean.forward(hidden);
-        Tensor pitchMean = pitchMeanForward.squeeze(-1); // Shape (batch,)
+        Tensor pitchMean = pitchMeanForward.squeeze(-1); // (batch, 1) -> (batch,)
         Tensor pitchStd = torch.exp(this.pitchLogSTD);
         Normal pitchDist = new Normal(pitchMean, pitchStd);
         pitchMeanForward.close();
@@ -533,7 +533,7 @@ public class MinecraftRL extends Module {
                 useFloat,
                 slotFloat
             );
-            action = torch.stack(tensorVector, 1);
+            action = torch.stack(tensorVector, 1); // (numEnvs,) x8 -> (numEnvs, 8)
             jumpFloat.close();
             sprintSneakFlaot.close();
             forwardFloat.close();
@@ -544,50 +544,50 @@ public class MinecraftRL extends Module {
         } else {
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
 
-            Tensor jumpKeyNarrow = action.narrow(1, 0, 1);
-            Tensor jumpKeySqueeze = jumpKeyNarrow.squeeze(1);
+            Tensor jumpKeyNarrow = action.narrow(1, 0, 1); // (numEnvs, 8) -> (numEnvs, 1)
+            Tensor jumpKeySqueeze = jumpKeyNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
             jumpKeyAction = jumpKeySqueeze.to(torch.ScalarType.Long);
             jumpKeyNarrow.close();
             jumpKeySqueeze.close();
 
-            Tensor sprintSneakKeysNarrow = action.narrow(1, 1, 1);
-            Tensor sprintSneakKeysSqueeze = sprintSneakKeysNarrow.squeeze(1);
+            Tensor sprintSneakKeysNarrow = action.narrow(1, 1, 1); // (numEnvs, 8) -> (numEnvs, 1)
+            Tensor sprintSneakKeysSqueeze = sprintSneakKeysNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
             sprintSneakKeysAction = sprintSneakKeysSqueeze.to(torch.ScalarType.Long);
             sprintSneakKeysNarrow.close();
             sprintSneakKeysSqueeze.close();
 
-            Tensor yawNarrow = action.narrow(1, 2, 1);
-            Tensor yawSqueeze = yawNarrow.squeeze(1);
+            Tensor yawNarrow = action.narrow(1, 2, 1); // (numEnvs, 8) -> (numEnvs, 1)
+            Tensor yawSqueeze = yawNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
             yawAction = yawSqueeze.to(yawMean.dtype());
             yawNarrow.close();
             yawSqueeze.close();
 
-            Tensor pitchNarrow = action.narrow(1, 3, 1);
-            Tensor pitchSqueeze = pitchNarrow.squeeze(1);
+            Tensor pitchNarrow = action.narrow(1, 3, 1); // (numEnvs, 8) -> (numEnvs, 1)
+            Tensor pitchSqueeze = pitchNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
             pitchAction = pitchSqueeze.to(pitchMean.dtype());
             pitchNarrow.close();
             pitchSqueeze.close();
 
-            Tensor forwardMoveKeysNarrow = action.narrow(1, 4, 1);
-            Tensor forwardMoveKeysSqueeze = forwardMoveKeysNarrow.squeeze(1);
+            Tensor forwardMoveKeysNarrow = action.narrow(1, 4, 1); // (numEnvs, 8) -> (numEnvs, 1)
+            Tensor forwardMoveKeysSqueeze = forwardMoveKeysNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
             forwardMoveKeysAction = forwardMoveKeysSqueeze.to(torch.ScalarType.Long);
             forwardMoveKeysNarrow.close();
             forwardMoveKeysSqueeze.close();
 
-            Tensor strafingMoveKeysNarrow = action.narrow(1, 5, 1);
-            Tensor strafingMoveKeysSqueeze = strafingMoveKeysNarrow.squeeze(1);
+            Tensor strafingMoveKeysNarrow = action.narrow(1, 5, 1); // (numEnvs, 8) -> (numEnvs, 1)
+            Tensor strafingMoveKeysSqueeze = strafingMoveKeysNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
             strafingMoveKeysAction = strafingMoveKeysSqueeze.to(torch.ScalarType.Long);
             strafingMoveKeysNarrow.close();
             strafingMoveKeysSqueeze.close();
 
-            Tensor attackUseItemNarrow = action.narrow(1, 6, 1);
-            Tensor attackUseItemSqueeze = attackUseItemNarrow.squeeze(1);
+            Tensor attackUseItemNarrow = action.narrow(1, 6, 1); // (numEnvs, 8) -> (numEnvs, 1)
+            Tensor attackUseItemSqueeze = attackUseItemNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
             attackUseItemAction = attackUseItemSqueeze.to(torch.ScalarType.Long);
             attackUseItemNarrow.close();
             attackUseItemSqueeze.close();
 
-            Tensor slotNarrow = action.narrow(1, 7, 1);
-            Tensor slotSqueeze = slotNarrow.squeeze(1);
+            Tensor slotNarrow = action.narrow(1, 7, 1); // (numEnvs, 8) -> (numEnvs, 1)
+            Tensor slotSqueeze = slotNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
             slotAction = slotSqueeze.to(torch.ScalarType.Long);
             slotNarrow.close();
             slotSqueeze.close();

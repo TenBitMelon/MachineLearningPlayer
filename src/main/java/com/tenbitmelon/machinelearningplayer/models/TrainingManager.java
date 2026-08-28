@@ -339,7 +339,7 @@ public class TrainingManager {
 
         try (Tensor slice = values.get(step)) {
             Tensor value = actionResult.value();
-            Tensor flattened = value.flatten();
+            Tensor flattened = value.flatten(); // (numEnvs, 1) -> (numEnvs,)
 
             slice.copy_(flattened);
 
@@ -419,7 +419,7 @@ public class TrainingManager {
 
         Tensor cpuStepRewards = Tensor.create(stepResult.rewards());
         Tensor gpuStepRewards = cpuStepRewards.to(device, torch.ScalarType.Float);
-        Tensor newRewardsTensor = gpuStepRewards.view(-1);
+        Tensor newRewardsTensor = gpuStepRewards.view(-1); // (numEnvs,) -> (numEnvs,)
         try (Tensor rewardSlice = rewards.get(step)) {
             rewardSlice.copy_(newRewardsTensor);
         }
@@ -476,7 +476,7 @@ public class TrainingManager {
          */
 
         Tensor nextValueRaw = model.getValue(nextObs, nextLstmState, nextTermination);
-        Tensor nextValue = nextValueRaw.reshape(-1);
+        Tensor nextValue = nextValueRaw.reshape(-1); // (numEnvs, 1) -> (numEnvs,)
         nextValueRaw.close();
         advantages.zero_();
 
@@ -570,19 +570,19 @@ public class TrainingManager {
          */
 
         /// [numSteps*numEnvs, obs_space]
-        Tensor bObs = observations.reshape(-1, Observation.OBSERVATION_SPACE_SIZE);
+        Tensor bObs = observations.reshape(-1, Observation.OBSERVATION_SPACE_SIZE); // (numSteps, numEnvs, OBSERVATION_SPACE_SIZE) -> (numSteps*numEnvs, OBSERVATION_SPACE_SIZE)
         /// [numSteps*numEnvs]
-        Tensor bLogProbs = logprobs.reshape(-1);
+        Tensor bLogProbs = logprobs.reshape(-1); // (numSteps, numEnvs) -> (numSteps*numEnvs,)
         /// [numSteps*numEnvs, action_space]
-        Tensor bActions = actions.reshape(-1, Action.ACTION_SPACE_SIZE);
+        Tensor bActions = actions.reshape(-1, Action.ACTION_SPACE_SIZE); // (numSteps, numEnvs, ACTION_SPACE_SIZE) -> (numSteps*numEnvs, ACTION_SPACE_SIZE)
         /// [numSteps*numEnvs]
-        Tensor bDones = terminations.reshape(-1);
+        Tensor bDones = terminations.reshape(-1); // (numSteps, numEnvs) -> (numSteps*numEnvs,)
         /// [numSteps*numEnvs]
-        Tensor bAdvantages = advantages.reshape(-1);
+        Tensor bAdvantages = advantages.reshape(-1); // (numSteps, numEnvs) -> (numSteps*numEnvs,)
         /// [numSteps*numEnvs]
-        Tensor bReturns = returns.reshape(-1);
+        Tensor bReturns = returns.reshape(-1); // (numSteps, numEnvs) -> (numSteps*numEnvs,)
         /// [numSteps*numEnvs]
-        Tensor bValues = values.reshape(-1);
+        Tensor bValues = values.reshape(-1); // (numSteps, numEnvs) -> (numSteps*numEnvs,)
 
 
         /*
@@ -599,7 +599,7 @@ public class TrainingManager {
 
         int envsPerBatch = args.numEnvs / args.numMinibatches;
         Tensor envinds = torch.arange(SCALAR_NUM_ENVS, new TensorOptions(device)); // Shape: [numEnvs]
-        Tensor flatinds = torch.arange(SCALAR_BATCH_SIZE, new TensorOptions(device)).reshape(args.numSteps, args.numEnvs); // Shape: [numSteps, numEnvs]
+        Tensor flatinds = torch.arange(SCALAR_BATCH_SIZE, new TensorOptions(device)).reshape(args.numSteps, args.numEnvs); // (numSteps*numEnvs,) -> (numSteps, numEnvs)
 
         /*
         clipfracs = []
@@ -624,7 +624,7 @@ public class TrainingManager {
              */
             Tensor randperm = torch.randperm(args.numEnvs, new TensorOptions(device));
             Tensor oldEnvIds = envinds;
-            envinds = envinds.index_select(0, randperm);
+            envinds = envinds.index_select(0, randperm); // (numEnvs,) -> (numEnvs,)
             envinds.retainReference();
             oldEnvIds.close();
             randperm.close();
@@ -647,8 +647,8 @@ public class TrainingManager {
                 mb_inds = flatinds[:, mbenvinds].ravel()  # be really careful about the index
                 */
 
-                Tensor mbenvinds = envinds.narrow(0, start, envsPerBatch);
-                Tensor mb_inds = flatinds.index_select(1, mbenvinds).ravel();
+                Tensor mbenvinds = envinds.narrow(0, start, envsPerBatch); // (numEnvs,) -> (envsPerBatch,)
+                Tensor mb_inds = flatinds.index_select(1, mbenvinds).ravel(); // (numSteps, numEnvs) -> (numSteps, envsPerBatch) -> (numSteps*envsPerBatch,)
 
                 /*
                 _, newlogprob, entropy, newvalue, _ = agent.get_action_and_value(
@@ -659,14 +659,14 @@ public class TrainingManager {
                 )
                  */
 
-                Tensor lstmStateHidden = initialLSTMState.hiddenState().index_select(1, mbenvinds);
-                Tensor lstmStateCell = initialLSTMState.cellState().index_select(1, mbenvinds);
+                Tensor lstmStateHidden = initialLSTMState.hiddenState().index_select(1, mbenvinds); // (1, numEnvs, hidden_size) -> (1, envsPerBatch, hidden_size)
+                Tensor lstmStateCell = initialLSTMState.cellState().index_select(1, mbenvinds); // (1, numEnvs, hidden_size) -> (1, envsPerBatch, hidden_size)
 
                 MinecraftRL.ActionAndValue actionAndValueResult = model.getActionAndValue(
-                    bObs.index_select(0, mb_inds),
+                    bObs.index_select(0, mb_inds), // (numSteps*numEnvs, OBSERVATION_SPACE_SIZE) -> (batchSize, OBSERVATION_SPACE_SIZE)
                     new MinecraftRL.LSTMState(lstmStateHidden, lstmStateCell),
-                    bDones.index_select(0, mb_inds),
-                    bActions.index_select(0, mb_inds)
+                    bDones.index_select(0, mb_inds), // (numSteps*numEnvs,) -> (batchSize,)
+                    bActions.index_select(0, mb_inds) // (numSteps*numEnvs, ACTION_SPACE_SIZE) -> (batchSize, ACTION_SPACE_SIZE)
                 );
 
                 /*
@@ -675,7 +675,7 @@ public class TrainingManager {
                 */
 
                 Tensor totalLogProbs = actionAndValueResult.totalLogProbs();
-                Tensor selected = bLogProbs.index_select(0, mb_inds);
+                Tensor selected = bLogProbs.index_select(0, mb_inds); // (numSteps*numEnvs,) -> (batchSize,)
                 Tensor logRatio = totalLogProbs.sub(selected);
                 Tensor ratio = logRatio.exp();
 
@@ -718,7 +718,7 @@ public class TrainingManager {
                     mb_advantages = (mb_advantages - mb_advantages.mean()) / (mb_advantages.std() + 1e-8)
                  */
 
-                Tensor mbAdvantages = bAdvantages.index_select(0, mb_inds);
+                Tensor mbAdvantages = bAdvantages.index_select(0, mb_inds); // (numSteps*numEnvs,) -> (batchSize,)
 
                 if (args.normAdv) {
                     Tensor mean = mbAdvantages.mean();
@@ -752,13 +752,13 @@ public class TrainingManager {
                 newvalue = newvalue.view(-1)
                 */
 
-                Tensor newvalue = actionAndValueResult.value().view(-1);
+                Tensor newvalue = actionAndValueResult.value().view(-1); // (batch, 1) -> (batch,)
 
                 /*
                 if args.clip_vloss:
                  */
-                Tensor bReturnsMbInds = bReturns.index_select(0, mb_inds);
-                Tensor bValueMbInds = bValues.index_select(0, mb_inds);
+                Tensor bReturnsMbInds = bReturns.index_select(0, mb_inds); // (numSteps*numEnvs,) -> (batchSize,)
+                Tensor bValueMbInds = bValues.index_select(0, mb_inds); // (numSteps*numEnvs,) -> (batchSize,)
 
 
                 if (args.clipVloss) {

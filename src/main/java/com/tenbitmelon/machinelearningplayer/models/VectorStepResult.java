@@ -24,7 +24,7 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
             Tensor tensor = observation.tensor();
             tensorVector.push_back(tensor);
         }
-        Tensor stack = torch.stack(tensorVector, 0);  // Stack along batch dimension
+        Tensor stack = torch.stack(tensorVector, 0);  // (OBSERVATION_SPACE_SIZE,) x N -> (N, OBSERVATION_SPACE_SIZE)
         tensorVector.close();
         return stack;
     }
