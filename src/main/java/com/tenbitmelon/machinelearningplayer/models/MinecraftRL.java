@@ -851,6 +851,7 @@ public class MinecraftRL extends Module {
             totalLogProbs.close();
             totalEntropy.close();
             value.close();
+            lstmState.close();
         }
     }
 }

@@ -334,9 +334,7 @@ public class TrainingManager {
         AutogradState.get_tls_state().set_grad_mode(false); // with torch.no_grad():
 
         MinecraftRL.ActionAndValue actionResult = model.getActionAndValue(nextObs, nextLstmState, nextTermination);
-        if (nextLstmState != null) nextLstmState.close();
-        nextLstmState = actionResult.lstmState();
-        nextLstmState.retainReference();
+        nextLstmState.copy_(actionResult.lstmState());
 
         try (Tensor slice = values.get(step)) {
             Tensor value = actionResult.value();
