@@ -15,7 +15,8 @@ import java.util.UUID;
 public class TrainingLogger {
     private final BufferedWriter writer;
 
-    public TrainingLogger(ExperimentConfig args, String logDir) {
+    public TrainingLogger(ExperimentConfig args) {
+        String logDir = "training/" + args.experimentId;
         String experimentId = UUID.randomUUID().toString();
         String startTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
@@ -25,7 +26,7 @@ public class TrainingLogger {
             throw new RuntimeException(e);
         }
 
-        String metaFilePath = logDir + "/" + experimentId + "_meta.txt";
+        String metaFilePath = logDir + "/meta.txt";
         try (BufferedWriter metaWriter = new BufferedWriter(new FileWriter(metaFilePath))) {
             metaWriter.write("experiment_id=" + experimentId + "\n");
             metaWriter.write("start_time=" + startTime + "\n");
@@ -35,7 +36,7 @@ public class TrainingLogger {
         }
 
         try {
-            String filePath = logDir + "/" + experimentId + ".csv";
+            String filePath = logDir + "/log.csv";
             this.writer = new BufferedWriter(new FileWriter(filePath, true));
 
             writer.write("timestamp,iteration,learning_rate,value_loss,policy_loss,entropy,old_approx_kl,approx_kl,clipfrac,explained_variance,iteration_time,SPS,num_terminations,num_truncations,average_rewards,total_rewards,bow_selected_steps,bow_drawing_steps,bow_fully_drawn_steps,shield_using_steps,gpu_mem_used_nvidia,gpu_mem_total_nvidia,gpu_util_nvidia,gpu_temp_nvidia,torch_allocated_bytes_current,torch_allocated_bytes_peak,torch_reserved_bytes_current,torch_reserved_bytes_peak,torch_active_bytes_current,torch_active_bytes_peak,torch_inactive_split_bytes_current,torch_inactive_split_bytes_peak,torch_requested_bytes_current,torch_requested_bytes_peak,torch_num_alloc_retries,torch_num_ooms,java_native_used,javacpp_registered_bytes,javacpp_registered_count,java_heap_used,os_available_physical_bytes,os_total_physical_bytes,javacpp_deallocator_thread_alive\n");

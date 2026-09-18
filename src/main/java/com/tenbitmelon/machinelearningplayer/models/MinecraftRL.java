@@ -11,11 +11,15 @@ import org.bytedeco.pytorch.Module;
 import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
+import java.io.File;
+
+import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
 
 public class MinecraftRL extends Module {
 
     private static final ScalarOptional SCALAR_n5 = new ScalarOptional(new Scalar(-5.0f));
     private static final ScalarOptional SCALAR_2 = new ScalarOptional(new Scalar(2.0f));
+    final ExperimentConfig args;
     final SequentialImpl network;
     final LSTMImpl lstm;
     final LinearImpl actorForwardMoveKeys;
@@ -34,6 +38,7 @@ public class MinecraftRL extends Module {
 
     public MinecraftRL(ExperimentConfig args, Device device) {
         this.device = device;
+        this.args = args;
         /*
          // Conv2d for local heightmaps
         self.local_heightmap_conv = nn.Sequential(
@@ -731,8 +736,10 @@ public class MinecraftRL extends Module {
 
     public void saveCheckpoint(int iteration) {
         OutputArchive outputArchive = new OutputArchive();
+        File folder = new File("training/" + args.experimentId + "/model_files/");
+        folder.mkdirs();
         this.save(outputArchive);
-        outputArchive.save_to("model_files/minecraft_rl_checkpoint_" + iteration + ".pt");
+        outputArchive.save_to("training/" + args.experimentId + "/model_files/" + iteration + ".pt");
         outputArchive.close();
     }
 
@@ -741,8 +748,8 @@ public class MinecraftRL extends Module {
             return;
         }
         InputArchive inputArchive = new InputArchive();
-        inputArchive.load_from("model_files/minecraft_rl_checkpoint_" + iteration + ".pt");
-        System.out.println("Loading MinecraftRL checkpoint from iteration " + iteration);
+        inputArchive.load_from("training/" + args.experimentId + "/model_files/" + iteration + ".pt");
+        LOGGER.info("Loading MinecraftRL checkpoint from iteration " + iteration);
         this.load(inputArchive);
         inputArchive.close();
 

@@ -104,6 +104,30 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
 
         LOGGER.info("Hello, Machine Learning Player is starting!");
 
+        // Load experiment from file
+        // -DexperimentId=%EXPERIMENT%
+        String experimentId = System.getProperty("experimentId");
+        if (experimentId != null && !experimentId.isEmpty() && !experimentId.equals("null")) {
+            LOGGER.info("Loading experiment from file: {}", experimentId);
+            TrainingManager.args = ExperimentConfig.fromFile("training/" + experimentId + "/args.yaml");
+
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    CURRENT_MODE = Mode.TRAINING;
+                    TrainingManager.setup();
+
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "ml productionRun");
+                        }
+                    }.runTaskLater(MachineLearningPlayer.PLUGIN, 100);
+
+                }
+            }.runTaskLater(this, 10);
+        }
+
         new BukkitRunnable() {
             @Override
             public void run() {

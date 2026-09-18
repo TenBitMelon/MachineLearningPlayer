@@ -36,7 +36,7 @@ public class TrainingManager {
     public static Tensor zerosLikeNumEnvs;
     /** Shape: [numEnvs] */
     public static Tensor onesLikeNumEnvs;
-    static ExperimentConfig args = new ExperimentConfig();
+    public static ExperimentConfig args = new ExperimentConfig();
     // Pre computes:
     private static final Scalar SCALAR_GAMMA = new Scalar(args.gamma);
     private static final Scalar SCALAR_GAMMA_GAE_LAMBDA = new Scalar(args.gamma * args.gaeLambda);
@@ -114,7 +114,7 @@ public class TrainingManager {
         // TODO: Use pinned memory for a lot of this
 
         device = new Device("cuda:0");
-        trainingLogger = new TrainingLogger(args, "logs/training");
+        trainingLogger = new TrainingLogger(args);
 
         model = new MinecraftRL(args, device);
         model.loadCheckpoint(args.startingCheckpoint);
