@@ -8,7 +8,6 @@ import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.UIElement;
 import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
-import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import io.papermc.paper.adventure.providers.ClickCallbackProviderImpl;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
@@ -206,7 +205,7 @@ public class MachineLearningCommand {
     }
 
     public static LiteralArgumentBuilder<CommandSourceStack> args() {
-        ExperimentConfig config = ExperimentConfig.getInstance();
+        ExperimentConfig config = new ExperimentConfig(); // TODO: Remove command
         return Commands.literal("args").executes(ctx -> {
                 CommandSender sender = ctx.getSource().getSender();
                 sender.sendPlainMessage("=== Arguments:");

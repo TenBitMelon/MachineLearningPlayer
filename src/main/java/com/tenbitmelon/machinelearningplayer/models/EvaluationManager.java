@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
+import com.tenbitmelon.machinelearningplayer.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
@@ -38,7 +39,7 @@ public class EvaluationManager {
     static public boolean runEvaluation = false;
     static public boolean sprint = false;
     public static Device device;
-    static ExperimentConfig args = ExperimentConfig.getInstance();
+    static ExperimentConfig args = new ExperimentConfig();
     //
     static MinecraftEnvironment environment;
     static MinecraftRL model;
@@ -84,7 +85,7 @@ public class EvaluationManager {
         armorStand.setInvulnerable(true);
         environment = new MinecraftEnvironment(args);
         environment.setTarget(armorStand);
-        model = new MinecraftRL(device);
+        model = new MinecraftRL(args, device);
         model.loadCheckpoint(args.startingCheckpoint);
         model.to(device, false);
         resetEvaluationMetrics();

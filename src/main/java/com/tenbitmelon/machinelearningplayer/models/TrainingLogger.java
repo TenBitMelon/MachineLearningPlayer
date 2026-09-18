@@ -1,5 +1,7 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
+import com.tenbitmelon.machinelearningplayer.ExperimentConfig;
+
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -43,6 +45,13 @@ public class TrainingLogger {
         }
     }
 
+    private static String formatDouble(double value) {
+        return String.format(Locale.ROOT, "%.6f", value);
+    }
+
+    private static String formatNullableDouble(Double value) {
+        return value != null ? formatDouble(value) : "";
+    }
 
     public void logStep(long iteration, double learningRate, double valueLoss, double policyLoss, double entropy,
                         Double oldApproxKl, Double approxKl, double clipfrac, double explainedVariance, double iterationTime, double sps,
@@ -59,7 +68,7 @@ public class TrainingLogger {
                         long javaHeapUsed, long osAvailablePhysicalBytes, long osTotalPhysicalBytes,
                         boolean javaCppDeallocatorThreadAlive) throws IOException {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
-        String[] values = new String[] {
+        String[] values = new String[]{
             timestamp,
             Long.toString(iteration),
             formatDouble(learningRate),
@@ -107,14 +116,6 @@ public class TrainingLogger {
         writer.write(String.join(",", values));
         writer.write('\n');
         writer.flush();
-    }
-
-    private static String formatDouble(double value) {
-        return String.format(Locale.ROOT, "%.6f", value);
-    }
-
-    private static String formatNullableDouble(Double value) {
-        return value != null ? formatDouble(value) : "";
     }
 
     public void close() {

@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
+import com.tenbitmelon.machinelearningplayer.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
 import com.tenbitmelon.machinelearningplayer.debugger.SystemStats;
@@ -35,7 +36,7 @@ public class TrainingManager {
     public static Tensor zerosLikeNumEnvs;
     /** Shape: [numEnvs] */
     public static Tensor onesLikeNumEnvs;
-    static ExperimentConfig args = ExperimentConfig.getInstance();
+    static ExperimentConfig args = new ExperimentConfig();
     // Pre computes:
     private static final Scalar SCALAR_GAMMA = new Scalar(args.gamma);
     private static final Scalar SCALAR_GAMMA_GAE_LAMBDA = new Scalar(args.gamma * args.gaeLambda);
@@ -115,7 +116,7 @@ public class TrainingManager {
         device = new Device("cuda:0");
         trainingLogger = new TrainingLogger(args, "logs/training");
 
-        model = new MinecraftRL(device);
+        model = new MinecraftRL(args, device);
         model.loadCheckpoint(args.startingCheckpoint);
         model.to(device, false);
         modelParameters = model.parameters();

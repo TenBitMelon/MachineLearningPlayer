@@ -1,10 +1,23 @@
-package com.tenbitmelon.machinelearningplayer.models;
+package com.tenbitmelon.machinelearningplayer;
+
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.TypeDescription;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.Constructor;
+import org.yaml.snakeyaml.nodes.Node;
+import org.yaml.snakeyaml.nodes.Tag;
+import org.yaml.snakeyaml.representer.Representer;
 
 import javax.annotation.Nullable;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
 
 public class ExperimentConfig {
 
-    public static final ExperimentConfig config = new ExperimentConfig();
+    public final String experimentId = UUID.randomUUID().toString();
     /**
      * The learning rate of the optimizer.
      */
@@ -84,10 +97,58 @@ public class ExperimentConfig {
     @Nullable
     public Integer startingCheckpoint = null;
 
-    private ExperimentConfig() {}
+    /**
+     * Feature flags for enabling or disabling specific features in the experiment.
+     */
+    public Set<FeatureFlag> featureFlags = EnumSet.noneOf(FeatureFlag.class);
 
-    public static ExperimentConfig getInstance() {
-        return config;
+    public ExperimentConfig() {}
+
+    public static ExperimentConfig fromFile(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            throw new IllegalArgumentException("File path cannot be null or empty");
+        }
+        try {
+            String yamlContent = Files.readString(Path.of(filePath));
+
+            LoaderOptions loaderOptions = new LoaderOptions();
+            Constructor constructor = new Constructor(ExperimentConfig.class, loaderOptions);
+
+            TypeDescription configDescription = new TypeDescription(ExperimentConfig.class);
+            configDescription.addPropertyParameters("featureFlags", FeatureFlag.class);
+            constructor.addTypeDescription(configDescription);
+
+            Yaml yaml = new Yaml(constructor);
+            return yaml.load(yamlContent);
+
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read the configuration file: " + filePath, e);
+        }
+    }
+
+    public void save() {
+        String filePath = "training/" + this.experimentId + "/args.yaml";
+        try {
+            DumperOptions options = new DumperOptions();
+            options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+            options.setPrettyFlow(true);
+            Representer representer = new Representer(options) {
+                {
+                    addClassTag(ExperimentConfig.class, Tag.MAP);
+                    addClassTag(FeatureFlag.class, Tag.STR);
+
+                    this.multiRepresenters.put(Set.class, data ->
+                        representSequence(Tag.SEQ, (Set<?>) data, DumperOptions.FlowStyle.BLOCK)
+                    );
+                }
+            };
+
+            Yaml yaml = new Yaml(representer, options);
+            String yamlContent = yaml.dump(this);
+            Files.writeString(Path.of(filePath), yamlContent);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to write the configuration file: " + filePath, e);
+        }
     }
 
     @Override
@@ -113,5 +174,11 @@ public class ExperimentConfig {
             ", numIterations=" + numIterations +
             ", startingCheckpoint=" + startingCheckpoint +
             '}';
+    }
+
+    public enum FeatureFlag {
+        HEIGHT_MAP_CONV,
+        LSTM_SIZE_128,
+        LAYER_NORM
     }
 }

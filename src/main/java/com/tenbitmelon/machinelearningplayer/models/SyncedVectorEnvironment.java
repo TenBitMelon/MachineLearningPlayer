@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
+import com.tenbitmelon.machinelearningplayer.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import com.tenbitmelon.machinelearningplayer.environment.StepResult;

@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.models;
 
+import com.tenbitmelon.machinelearningplayer.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import com.tenbitmelon.machinelearningplayer.util.distributions.Categorical;
 import com.tenbitmelon.machinelearningplayer.util.distributions.Normal;
@@ -31,7 +32,7 @@ public class MinecraftRL extends Module {
     final SequentialImpl localHeightmapConv;
     final LinearImpl actorSlot;
 
-    public MinecraftRL(Device device) {
+    public MinecraftRL(ExperimentConfig args, Device device) {
         this.device = device;
         /*
          // Conv2d for local heightmaps
@@ -43,23 +44,29 @@ public class MinecraftRL extends Module {
             nn.Tanh(),
          */
 
-        int observationConv2dOutSize = 16;
-
-        // Conv2d Input size = [B, 1, 7, 7]
-        Conv2dOptions conv2dOptions = new Conv2dOptions(1, 4, new LongPointer(3, 3));
-        // conv2dOptions.stride().put(1);
-        // conv2dOptions.padding().get0().put(0);
-        Conv2dImpl conv2d = new Conv2dImpl(conv2dOptions);
-        TanhImpl convTanh1 = new TanhImpl();
-        FlattenImpl flatten = new FlattenImpl();
-        LinearImpl convLinear = createLinearLayer(5 * 5 * 4, observationConv2dOutSize, device);
-        TanhImpl convTanh2 = new TanhImpl();
-
+        int observationHeightSizeIn = 7 * 7;
+        int observationHeightSizeOut = 16;
         SequentialImpl localHeightmapConv = new SequentialImpl();
-        localHeightmapConv.push_back("height_conv_conv2d", conv2d);
-        localHeightmapConv.push_back("height_conv_tanh1", convTanh1);
+
+        if (args.featureFlags.contains(ExperimentConfig.FeatureFlag.HEIGHT_MAP_CONV)) {
+            // Conv2d Input size = [B, 1, 7, 7]
+            Conv2dOptions conv2dOptions = new Conv2dOptions(1, 4, new LongPointer(3, 3));
+            Conv2dImpl conv2d = new Conv2dImpl(conv2dOptions);
+            localHeightmapConv.push_back("height_conv_conv2d", conv2d);
+
+            TanhImpl convTanh1 = new TanhImpl();
+            localHeightmapConv.push_back("height_conv_tanh1", convTanh1);
+
+            observationHeightSizeIn = 4 * 5 * 5; // 4 channels, 5x5 output from conv2d
+        }
+
+        FlattenImpl flatten = new FlattenImpl();
         localHeightmapConv.push_back("height_conv_flatten", flatten);
+
+        LinearImpl convLinear = createLinearLayer(observationHeightSizeIn, observationHeightSizeOut, device);
         localHeightmapConv.push_back("height_conv_linear", convLinear);
+
+        TanhImpl convTanh2 = new TanhImpl();
         localHeightmapConv.push_back("height_conv_tanh2", convTanh2);
 
         register_module("height_conv", localHeightmapConv);
@@ -75,7 +82,7 @@ public class MinecraftRL extends Module {
         )
         */
 
-        long observationSize = Observation.OBSERVATION_SPACE_SIZE - Observation.SIZE_LOCAL_HEIGHT_MAP + observationConv2dOutSize; // 16 is the output size of the local heightmap conv layers
+        long observationSize = Observation.OBSERVATION_SPACE_SIZE - Observation.SIZE_LOCAL_HEIGHT_MAP + observationHeightSizeOut; // 16 is the output size of the local heightmap conv layers
 
         LinearImpl networkLinear1 = createLinearLayer(observationSize, 64, device);
         TanhImpl networkTanh1 = new TanhImpl();
@@ -84,6 +91,14 @@ public class MinecraftRL extends Module {
 
         SequentialImpl network = new SequentialImpl();
         network.push_back("network_linear1", networkLinear1);
+
+        if (args.featureFlags.contains(ExperimentConfig.FeatureFlag.LAYER_NORM)) {
+            LayerNormOptions layerNormOptions = new LayerNormOptions(new LongPointer(64));
+            LayerNormImpl layerNorm = new LayerNormImpl(layerNormOptions);
+            network.push_back("network_layer_norm", layerNorm);
+        }
+
+
         network.push_back("network_tanh1", networkTanh1);
         network.push_back("network_linear2", networkLinear2);
         network.push_back("network_tanh2", networkTanh2);
@@ -101,7 +116,8 @@ public class MinecraftRL extends Module {
                 nn.init.orthogonal_(param, 1.0)
         */
 
-        LSTMImpl lstm = new LSTMImpl(64, 64);
+        int lstmSize = args.featureFlags.contains(ExperimentConfig.FeatureFlag.LSTM_SIZE_128) ? 128 : 64;
+        LSTMImpl lstm = new LSTMImpl(64, lstmSize);
         StringVector keys = lstm.named_parameters().keys();
         for (int i = 0; i < keys.size(); i++) {
             String name = keys.get(i).getString();
@@ -122,11 +138,11 @@ public class MinecraftRL extends Module {
         self.y_actor = layer_init(nn.Linear(64, 3), std=0.01)
         */
 
-        LinearImpl actorForwardMoveKeys = createLinearLayer(64, 3, 0.01, device);
+        LinearImpl actorForwardMoveKeys = createLinearLayer(lstmSize, 3, 0.01, device);
         register_module("actor_forward_move_keys", actorForwardMoveKeys);
         this.actorForwardMoveKeys = actorForwardMoveKeys;
 
-        LinearImpl actorStrafingMoveKeys = createLinearLayer(64, 3, 0.01, device);
+        LinearImpl actorStrafingMoveKeys = createLinearLayer(lstmSize, 3, 0.01, device);
         register_module("actor_strafing_move_keys", actorStrafingMoveKeys);
         this.actorStrafingMoveKeys = actorStrafingMoveKeys;
 
@@ -135,14 +151,14 @@ public class MinecraftRL extends Module {
         self.rot_logstd = nn.Parameter(torch.ones(1) * -1.0)
         */
 
-        LinearImpl yawMean = createLinearLayer(64, 1, 0.01, device);
+        LinearImpl yawMean = createLinearLayer(lstmSize, 1, 0.01, device);
         register_module("yaw_mean", yawMean);
         this.yawMean = yawMean;
         Tensor yawLogSTD = torch.ones(new long[]{1}, new TensorOptions(torch.ScalarType.Float)).mul(new Scalar(-1.0f));
         register_parameter("yaw_logstd", yawLogSTD);
         this.yawLogSTD = yawLogSTD;
 
-        LinearImpl pitchMean = createLinearLayer(64, 1, 0.01, device);
+        LinearImpl pitchMean = createLinearLayer(lstmSize, 1, 0.01, device);
         register_module("pitch_mean", pitchMean);
         this.pitchMean = pitchMean;
         Tensor pitchLogSTD = torch.ones(new long[]{1}, new TensorOptions(torch.ScalarType.Float)).mul(new Scalar(-1.0f));
@@ -150,23 +166,23 @@ public class MinecraftRL extends Module {
         this.pitchLogSTD = pitchLogSTD;
 
         // Jump
-        LinearImpl actorJumpKey = createLinearLayer(64, 2, 0.01, device); // 2 outputs: jump or not jump
+        LinearImpl actorJumpKey = createLinearLayer(lstmSize, 2, 0.01, device); // 2 outputs: jump or not jump
         register_module("actor_jump_key", actorJumpKey);
         this.actorJumpKey = actorJumpKey;
 
         // Sprint & Sneak
 
-        LinearImpl actorSprintSneakKeys = createLinearLayer(64, 3, 0.01, device); // 3 outputs: no sprint/sneak, sprint, sneak
+        LinearImpl actorSprintSneakKeys = createLinearLayer(lstmSize, 3, 0.01, device); // 3 outputs: no sprint/sneak, sprint, sneak
         register_module("actor_sprint_sneak_keys", actorSprintSneakKeys);
         this.actorSprintSneakKeys = actorSprintSneakKeys;
 
         // Attack & Use
-        LinearImpl actorAttackUseItem = createLinearLayer(64, 3, 0.01, device); // 3 outputs: no attack/use, attack, use
+        LinearImpl actorAttackUseItem = createLinearLayer(lstmSize, 3, 0.01, device); // 3 outputs: no attack/use, attack, use
         register_module("actor_attack_use_item", actorAttackUseItem);
         this.actorAttackUseItem = actorAttackUseItem;
 
         // Slot 0 or 1
-        LinearImpl actorSlot = createLinearLayer(64, 2, 0.01, device); // 2 outputs: slot 0 or slot 1
+        LinearImpl actorSlot = createLinearLayer(lstmSize, 2, 0.01, device); // 2 outputs: slot 0 or slot 1
         register_module("actor_slot", actorSlot);
         this.actorSlot = actorSlot;
 
@@ -174,7 +190,7 @@ public class MinecraftRL extends Module {
         self.critic = layer_init(nn.Linear(64, 1), std=1)
         */
 
-        LinearImpl criticLinear = createLinearLayer(64, 1, 1.0, device);
+        LinearImpl criticLinear = createLinearLayer(lstmSize, 1, 1.0, device);
         register_module("critic", criticLinear);
         this.critic = criticLinear;
     }

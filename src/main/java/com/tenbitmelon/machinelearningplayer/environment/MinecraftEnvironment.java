@@ -3,7 +3,7 @@ package com.tenbitmelon.machinelearningplayer.environment;
 import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.agent.EntityPlayerActionPack;
-import com.tenbitmelon.machinelearningplayer.models.ExperimentConfig;
+import com.tenbitmelon.machinelearningplayer.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.InteractionHand;
