@@ -106,8 +106,9 @@ public class SyncedVectorEnvironment {
 
         Tensor observationTensor = createObservationTensor(observations).to(device, torch.ScalarType.Float);
 
-        Tensor nextValuePreReset = model.getValue(observationTensor, nextLstmState, zerosLikeNumEnvs);
-        nextValuePreReset = nextValuePreReset.reshape(-1); // (numEnvs,1) -> (numEnvs,)
+        Tensor nextValuePreResetA = model.getValue(observationTensor, nextLstmState, zerosLikeNumEnvs);
+        Tensor nextValuePreReset = nextValuePreResetA.reshape(-1); // (numEnvs,1) -> (numEnvs,)
+        nextValuePreResetA.close();
 
         for (int i = 0; i < numEnvs; i += 2) {
             if (terminated[i] || truncated[i]) {

@@ -397,17 +397,17 @@ public class MinecraftRL extends Module {
         newHidden.close();
 
         hiddenState = hiddenState.clone();
-        hiddenState.retainReference();
         cellState = cellState.clone();
-        cellState.retainReference();
         newHiddenTensor.retainReference();
+
+        LSTMState lstmState1 = new LSTMState(hiddenState, cellState);
+        lstmState1.retainReference();
 
         scope.close();
 
         /*
         return new_hidden, lstm_state
          */
-        LSTMState lstmState1 = new LSTMState(hiddenState, cellState);
         return new States(newHiddenTensor, lstmState1);
     }
 
