@@ -3,6 +3,7 @@ package com.tenbitmelon.machinelearningplayer.models;
 import com.tenbitmelon.machinelearningplayer.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
+import com.tenbitmelon.machinelearningplayer.debugger.LeakProbe;
 import com.tenbitmelon.machinelearningplayer.debugger.SystemStats;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
@@ -57,6 +58,7 @@ public class TrainingManager {
     //
     private static final Scalar SCALAR_ENT_COEF = new Scalar(args.entCoef);
     private static final Scalar SCALAR_VF_COEF = new Scalar(args.vfCoef);
+    public static boolean quitOnFinish = false;
     static SyncedVectorEnvironment environment;
     static MinecraftRL model;
     static MinecraftRL.LSTMState initialLSTMState;
@@ -200,6 +202,7 @@ public class TrainingManager {
     }
 
     public static void shutdown() {
+        LeakProbe.close();
         if (trainingLogger != null)
             trainingLogger.close();
         if (nextObs != null) {
@@ -286,8 +289,12 @@ public class TrainingManager {
         if (iteration >= args.numIterations + 1) {
             LOGGER.info("Maximum iterations reached. Stopping training.");
             runTraining = false;
+            LeakProbe.close();
+            if (quitOnFinish) Bukkit.getServer().shutdown();
             return;
         }
+
+        LeakProbe.iterStart(iteration);
 
         // Reset iteration stats
         numTerminations = 0;
@@ -324,6 +331,7 @@ public class TrainingManager {
     public static void runPreTickStep() {
         PointerScope scope = new PointerScope();
         logText = "Run Steps...";
+        LeakProbe.stepStart(iteration);
 
         /*
         for step in range(0, args.num_steps):
@@ -480,6 +488,7 @@ public class TrainingManager {
         logText = "Finish Epoch...";
 
         PointerScope scope = new PointerScope();
+        LeakProbe.collectionEnd(iteration);
 
         /*
         with torch.no_grad():
@@ -620,6 +629,8 @@ public class TrainingManager {
         int envsPerBatch = args.numEnvs / args.numMinibatches;
         Tensor envinds = torch.arange(SCALAR_NUM_ENVS, new TensorOptions(device)); // Shape: [numEnvs]
         Tensor flatinds = torch.arange(SCALAR_BATCH_SIZE, new TensorOptions(device)).reshape(args.numSteps, args.numEnvs); // (numSteps*numEnvs,) -> (numSteps, numEnvs)
+
+        LeakProbe.afterGae(iteration);
 
         /*
         clipfracs = []
@@ -896,6 +907,8 @@ public class TrainingManager {
 
         }
 
+        LeakProbe.afterEpochs(iteration);
+        LeakProbe.snapshotDump(iteration);
 
 
         /*
@@ -926,21 +939,6 @@ public class TrainingManager {
 
         LOGGER.info("==================== Finished Epoch for Iteration:      {} ====================", iteration - 1);
 
-        // Write all sites to file for debugging memory leaks
-        File logFile = new File("training/" + args.experimentId + "/sites/");
-        logFile.mkdirs();
-        String contents = "Native Allocation Tracer Sites for Iteration " + iteration + "\n";
-        for (NativeAllocationTracer.Site site : NativeAllocationTracer.getSites()) {
-            contents += site.toString() + "\n";
-        }
-        try {
-            Files.writeString(logFile.toPath().resolve(iteration + "_sites.txt"), contents);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        // SnapshotInfo allocatorSnapshot = torch_cuda.getAllocator().snapshot();
-        // allocatorSnapshot.segments()
 
         if (iteration % 20 == 0) {
             SystemStats.HardwareMetrics hw = SystemStats.snapshot(device.index());
@@ -1075,6 +1073,10 @@ public class TrainingManager {
         // yTrue.close();
 
         scope.close();
+
+        LeakProbe.nativeAllocationSnapshot(iteration);
+
+        LeakProbe.iterEnd(iteration);
 
         iteration++;
 

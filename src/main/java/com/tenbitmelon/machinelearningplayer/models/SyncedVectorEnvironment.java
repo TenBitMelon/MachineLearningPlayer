@@ -5,6 +5,7 @@ import com.tenbitmelon.machinelearningplayer.environment.MinecraftEnvironment;
 import com.tenbitmelon.machinelearningplayer.environment.Observation;
 import com.tenbitmelon.machinelearningplayer.environment.StepResult;
 import org.bytedeco.pytorch.Device;
+import org.bytedeco.pytorch.NoGradGuard;
 import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.global.torch;
 
@@ -104,11 +105,15 @@ public class SyncedVectorEnvironment {
             observations[i + 1] = oppositeStepResult.observation();
         }
 
+        NoGradGuard noGrad = new NoGradGuard();
+
         Tensor observationTensor = createObservationTensor(observations).to(device, torch.ScalarType.Float);
 
         Tensor nextValuePreResetA = model.getValue(observationTensor, nextLstmState, zerosLikeNumEnvs);
         Tensor nextValuePreReset = nextValuePreResetA.reshape(-1); // (numEnvs,1) -> (numEnvs,)
         nextValuePreResetA.close();
+
+        noGrad.close();
 
         for (int i = 0; i < numEnvs; i += 2) {
             if (terminated[i] || truncated[i]) {

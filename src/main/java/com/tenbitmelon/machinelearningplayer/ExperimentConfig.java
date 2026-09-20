@@ -182,6 +182,8 @@ public class ExperimentConfig {
     public enum FeatureFlag {
         HEIGHT_MAP_CONV,
         LSTM_SIZE_128,
-        LAYER_NORM
+        LAYER_NORM,
+        LEAK_PROBE,
+        ALLOCATOR_SNAPSHOT,
     }
 }

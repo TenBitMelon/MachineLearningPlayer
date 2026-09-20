@@ -118,6 +118,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
                 public void run() {
                     CURRENT_MODE = Mode.TRAINING;
                     TrainingManager.setup();
+                    TrainingManager.quitOnFinish = true;
 
                     new BukkitRunnable() {
                         @Override
