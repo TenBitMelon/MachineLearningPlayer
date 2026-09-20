@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer;
 
+import org.bytedeco.pytorch.global.torch_cuda;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.TypeDescription;
@@ -49,7 +50,7 @@ public class ExperimentConfig {
     /**
      * The surrogate clipping coefficient.
      */
-    public final float clipCoef = 0.1f;
+    public final float clipCoef = 0.2f;
     /**
      * Toggles whether to use a clipped loss for the value function, as per the paper.
      */
@@ -149,6 +150,8 @@ public class ExperimentConfig {
         } catch (IOException e) {
             throw new RuntimeException("Failed to write the configuration file: " + filePath, e);
         }
+
+
     }
 
     @Override

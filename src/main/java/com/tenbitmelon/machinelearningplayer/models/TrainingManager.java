@@ -14,11 +14,17 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.PointerScope;
+import org.bytedeco.javacpp.tools.NativeAllocationTracer;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.cuda.CUDAAllocator;
 import org.bytedeco.pytorch.cuda.DeviceStats;
 import org.bytedeco.pytorch.global.torch;
 import org.bytedeco.pytorch.global.torch_cuda;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
@@ -331,8 +337,8 @@ public class TrainingManager {
          */
         logText = "Getting action and value for step " + step;
 
-        AutogradState.get_tls_state().set_grad_mode(false); // with torch.no_grad():
-
+        // with torch.no_grad():
+        NoGradGuard noGrad = new NoGradGuard();
         MinecraftRL.ActionAndValue actionResult = model.getActionAndValue(nextObs, nextLstmState, nextTermination);
         nextLstmState.copy_(actionResult.lstmState());
 
@@ -346,7 +352,7 @@ public class TrainingManager {
             flattened.close();
         }
 
-        AutogradState.get_tls_state().set_grad_mode(true);
+        noGrad.close();
 
         /*
         actions[step] = action
@@ -438,15 +444,6 @@ public class TrainingManager {
         lastShieldUsingSteps += stepResult.shieldUsingSteps();
 
         stepResult.close();
-
-        /*
-        if "final_info" in infos:
-            for info in infos["final_info"]:
-                if info and "episode" in info:
-                    print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                    writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-                    writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
-        */
 
         // TODO: Handle logging of episodic returns and lengths
 
@@ -887,8 +884,21 @@ public class TrainingManager {
 
         LOGGER.info("==================== Finished Epoch for Iteration:      {} ====================", iteration - 1);
 
-        if (iteration % 20 == 0) {
+        // Write all sites to file for debugging memory leaks
+        File logFile = new File("training/" + args.experimentId + "/sites/");
+        logFile.mkdirs();
+        String contents = "Native Allocation Tracer Sites for Iteration " + iteration + "\n";
+        for (NativeAllocationTracer.Site site : NativeAllocationTracer.getSites()) {
+            contents += site.toString() + "\n";
+        }
+        try {
+            Files.writeString(logFile.toPath().resolve(iteration + "_sites.txt"), contents);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
+
+        if (iteration % 20 == 0) {
             SystemStats.HardwareMetrics hw = SystemStats.snapshot(device.index());
 
             LOGGER.info("GPU: {}% | Mem: {} / {} | Temp: {}C",

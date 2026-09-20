@@ -1,6 +1,6 @@
 # Machine Learning Player (Java + LibTorch)
 
-A **Work-In-Progress**, native Java implementation of Proximal Policy Optimization (PPO) running directly inside a
+A native Java implementation of Proximal Policy Optimization (PPO) running directly inside a
 Minecraft Paper server.
 
 ![Status](https://img.shields.io/badge/Status-Experimental%20%2F%20WIP-red)
@@ -9,11 +9,14 @@ Minecraft Paper server.
 ![Platform](https://img.shields.io/badge/Platform-Windows%20(x86__64)-blue)
 
 
-> **🚧 VERY WIP AND UNSTABLE 🚧**
+> **🚧 VERY WIP AND UNUSABLE 🚧**
 >
 > This project is in the very early stages of development. It is **experimental**.
 > * The build setup is currently complex due to specific LibTorch/JavaCPP snapshot dependencies.
 > * It is currently hardcoded for **Windows (x86_64) with CUDA**.
+
+I know this project is literally AI, but no AI was used to write the code! It is entirely so I can learn how the PPO RL
+algorithm works.
 
 ## Overview
 
@@ -22,9 +25,9 @@ entirely into Java, running as a Spigot/Paper plugin.
 
 Instead of bridging to Python (like MineRL), this project uses **JavaCPP** to access **LibTorch (PyTorch C++)** directly
 from Java. This allows the Network training loop to run synchronously with the Minecraft
-Server tick loop, sharing memory and data structures without network overhead.
+Server tick loop, sharing memory and data without network overhead.
 
-### Key Features
+### Things
 
 * **In-Engine Training:** No external Python scripts. The server *is* the training environment.
 * **Vectorized Environments:** Simulates multiple "Agents" ($N$ environments) on a single server thread, batched into

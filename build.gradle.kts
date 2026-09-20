@@ -37,7 +37,12 @@ dependencies {
 
     // javacpp-1.5.12-20250613.133933-85-windows-x86_64.jar
 //    implementation("org.bytedeco:javacpp:1.5.12-20250613.133933-85:windows-x86_64")
-    implementation("org.bytedeco:javacpp:1.5.12:windows-x86_64")
+//    implementation("org.bytedeco:javacpp:1.5.14:windows-x86_64")
+//
+//    implementation("org.bytedeco:pytorch:2.13.0-1.5.14")
+//    implementation("org.bytedeco:pytorch:2.13.0-1.5.14:windows-x86_64-gpu")
+
+    implementation("org.bytedeco:javacpp:1.5.13:windows-x86_64")
 
     implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.193524-13")
     implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.193524-13:windows-x86_64-gpu")

@@ -266,12 +266,10 @@ public class MinecraftRL extends Module {
 
         Tensor q = qGpu.to(originalDevice, torch.ScalarType.Float);
 
-        AutogradState.get_tls_state().set_grad_mode(false);
-
-        tensor.view_as(q).copy_(q); // Copy the orthogonal matrix to the tensor
-        tensor.mul_(new Scalar(std)); // Scale the tensor by the standard deviation
-
-        AutogradState.get_tls_state().set_grad_mode(true);
+        try (NoGradGuard noGradGuard = new NoGradGuard()) {
+            tensor.view_as(q).copy_(q); // Copy the orthogonal matrix to the tensor
+            tensor.mul_(new Scalar(std)); // Scale the tensor by the standard deviation
+        }
     }
 
     static LinearImpl createLinearLayer(long inputsDim, long outputDims, double std, Device device) {
@@ -715,6 +713,7 @@ public class MinecraftRL extends Module {
         scope.close();
 
         // states.close();
+        states.newHiddenTensor.close();
         hidden.close();
 
         return new ActionAndValue(

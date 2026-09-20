@@ -32,6 +32,9 @@ import org.bytedeco.cuda.presets.cupti;
 import org.bytedeco.javacpp.Loader;
 import org.bytedeco.javacpp.presets.javacpp;
 import org.bytedeco.openblas.presets.openblas;
+import org.bytedeco.pytorch.MTIAHooksInterface;
+import org.bytedeco.pytorch.cuda.AllocatorTraceTracker;
+import org.bytedeco.pytorch.cuda.CUDAAllocator;
 import org.bytedeco.pytorch.presets.torch;
 import org.bytedeco.pytorch.presets.torch_cuda;
 import org.slf4j.event.Level;
@@ -85,7 +88,6 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         // System.out.println("is_cuda = " + device.is_cuda());
         // System.out.println("is_cpu = " + device.is_cpu());
         // System.out.println("type = " + device.type().toString());
-
 
         LOGGER = new Logger();
         LOGGER.setEnabled(Level.DEBUG, false);
