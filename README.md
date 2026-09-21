@@ -7,6 +7,7 @@ Minecraft Paper server.
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![PyTorch](https://img.shields.io/badge/LibTorch-C%2B%2B-firebrick)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20(x86__64)-blue)
+![Time Badge](https://img.shields.io/badge/Time_spent-145_hrs-brightgreen)
 
 
 > **🚧 VERY WIP AND UNUSABLE 🚧**

@@ -29,7 +29,7 @@ public class Logger {
                 value = "null";
             } else if (arg.getClass().isArray()) {
                 value = Arrays.deepToString(new Object[]{arg});
-                value = value.substring(1, value.length() - 1); // Remove brackets
+                value = value.substring(1, value.length() - 1);
             } else {
                 value = arg.toString();
             }
@@ -42,26 +42,6 @@ public class Logger {
         if (enabledLevels.getOrDefault(level, false)) {
             System.out.printf("[%s] %s%n", level.name(), format(message, args));
         }
-    }
-
-    public void memory() {
-        DeviceStats deviceStats = torch_cuda.getAllocator().getDeviceStats(device.index());
-        StackTraceElement stackTraceElement = Thread.currentThread().getStackTrace()[2];
-        long nativeUsed = Pointer.physicalBytes(); // in bytes
-        JavaCppDiagnostics.Snapshot diagnostics = JavaCppDiagnostics.snapshot();
-        log(Level.INFO, "T:{}, C:{} L:{}, A:{}, N:{}, R:{}, RC:{}, AP:{}, TP:{}, DT:{}",
-            System.currentTimeMillis(),
-            stackTraceElement.getClassName(),
-            stackTraceElement.getLineNumber(),
-            deviceStats.allocated_bytes().current(), // in bytes
-            nativeUsed,
-            diagnostics.registeredBytes(),
-            diagnostics.registeredCount(),
-            diagnostics.availablePhysicalBytes(),
-            diagnostics.totalPhysicalBytes(),
-            diagnostics.deallocatorThreadAlive()
-        );
-        deviceStats.close();
     }
 
     public void debug(String message, Object... args) {

@@ -36,17 +36,9 @@ public class MachineLearningCommand {
             .executes(ctx -> {
                 CommandSender sender = ctx.getSource().getSender();
                 sender.sendPlainMessage("Mode: " + CURRENT_MODE);
-                sender.sendPlainMessage(TrainingManager.getTrainingSummary());
                 sender.sendPlainMessage(EvaluationManager.getDetailedEvaluationSummary());
                 return Command.SINGLE_SUCCESS;
             })
-            .then(Commands.literal("stats").executes(ctx -> {
-                CommandSender sender = ctx.getSource().getSender();
-                sender.sendPlainMessage("Mode: " + CURRENT_MODE);
-                sender.sendPlainMessage(TrainingManager.getTrainingSummary());
-                sender.sendPlainMessage(EvaluationManager.getDetailedEvaluationSummary());
-                return Command.SINGLE_SUCCESS;
-            }))
             .then(Commands.literal("sprint").executes(ctx -> {
                 TrainingManager.sprint = !TrainingManager.sprint;
                 ctx.getSource().getSender().sendPlainMessage("Sprint mode " + (TrainingManager.sprint ? "enabled" : "disabled"));
@@ -66,11 +58,6 @@ public class MachineLearningCommand {
                     }
                 }
                 ctx.getSource().getSender().sendPlainMessage("No mode selected.");
-                return Command.SINGLE_SUCCESS;
-            }))
-            .then(Commands.literal("checkpoint").executes(ctx -> {
-                int it = TrainingManager.createCheckpoint();
-                ctx.getSource().getSender().sendPlainMessage("Checkpoint created for iteration " + it);
                 return Command.SINGLE_SUCCESS;
             }))
             .then(Commands.literal("clearUiCallbacks").executes(ctx -> {
@@ -158,8 +145,7 @@ public class MachineLearningCommand {
                     EvaluationManager.getEnvironment().reset();
                     ctx.getSource().getSender().sendPlainMessage("All evaluation environments reset.");
                 } else {
-                    TrainingManager.reset();
-                    ctx.getSource().getSender().sendPlainMessage("All training environments reset.");
+                    ctx.getSource().getSender().sendPlainMessage("You are not in evaluation mode. Cannot reset training environments.");
                 }
                 return Command.SINGLE_SUCCESS;
             }))

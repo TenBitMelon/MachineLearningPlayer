@@ -3,8 +3,7 @@ package com.tenbitmelon.machinelearningplayer.models;
 import com.tenbitmelon.machinelearningplayer.ExperimentConfig;
 import com.tenbitmelon.machinelearningplayer.MachineLearningPlayer;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
-import com.tenbitmelon.machinelearningplayer.debugger.LeakProbe;
-import com.tenbitmelon.machinelearningplayer.debugger.SystemStats;
+import com.tenbitmelon.machinelearningplayer.debugger.LeakLogger;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.BooleanControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.ButtonControl;
 import com.tenbitmelon.machinelearningplayer.debugger.ui.controls.CounterControl;
@@ -15,18 +14,11 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.PointerScope;
-import org.bytedeco.javacpp.tools.NativeAllocationTracer;
 import org.bytedeco.pytorch.*;
 import org.bytedeco.pytorch.cuda.CUDAAllocator;
 import org.bytedeco.pytorch.cuda.DeviceStats;
-import org.bytedeco.pytorch.cuda.SnapshotInfo;
 import org.bytedeco.pytorch.global.torch;
 import org.bytedeco.pytorch.global.torch_cuda;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.CURRENT_MODE;
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
@@ -70,6 +62,7 @@ public class TrainingManager {
     static int step = 0;
     static String logText = "";
     static TrainingLogger trainingLogger;
+    static LeakLogger leakLogger;
     static TensorVector modelParameters;
     /** Shape: [numEnvs, Observation.OBSERVATION_SPACE_SIZE] */
     private static Tensor nextObs;
@@ -101,14 +94,6 @@ public class TrainingManager {
     private static boolean needsPostTickStep = false;
     private static int numTerminations = 0;
     private static int numTruncations = 0;
-    private static double lastValueLoss = 0.0;
-    private static double lastPolicyLoss = 0.0;
-    private static double lastApproxKl = 0.0;
-    private static double lastClipFrac = 0.0;
-    private static double lastIterationTime = 0.0;
-    private static double lastSps = 0.0;
-    private static double lastAverageRewards = 0.0;
-    private static double lastTotalRewards = 0.0;
     private static int lastBowSelectedSteps = 0;
     private static int lastBowDrawingSteps = 0;
     private static int lastBowFullyDrawnSteps = 0;
@@ -124,6 +109,7 @@ public class TrainingManager {
 
         device = new Device("cuda:0");
         trainingLogger = new TrainingLogger(args);
+        leakLogger = new LeakLogger(args);
 
         model = new MinecraftRL(args, device);
         model.loadCheckpoint(args.startingCheckpoint);
@@ -202,7 +188,8 @@ public class TrainingManager {
     }
 
     public static void shutdown() {
-        LeakProbe.close();
+        if (leakLogger != null)
+            leakLogger.close();
         if (trainingLogger != null)
             trainingLogger.close();
         if (nextObs != null) {
@@ -289,12 +276,12 @@ public class TrainingManager {
         if (iteration >= args.numIterations + 1) {
             LOGGER.info("Maximum iterations reached. Stopping training.");
             runTraining = false;
-            LeakProbe.close();
+            leakLogger.close();
             if (quitOnFinish) Bukkit.getServer().shutdown();
             return;
         }
 
-        LeakProbe.iterStart(iteration);
+        leakLogger.iterStart(iteration);
 
         // Reset iteration stats
         numTerminations = 0;
@@ -331,7 +318,7 @@ public class TrainingManager {
     public static void runPreTickStep() {
         PointerScope scope = new PointerScope();
         logText = "Run Steps...";
-        LeakProbe.stepStart(iteration);
+        leakLogger.stepStart(iteration);
 
         /*
         for step in range(0, args.num_steps):
@@ -488,7 +475,7 @@ public class TrainingManager {
         logText = "Finish Epoch...";
 
         PointerScope scope = new PointerScope();
-        LeakProbe.collectionEnd(iteration);
+        leakLogger.collectionEnd(iteration);
 
         /*
         with torch.no_grad():
@@ -630,7 +617,7 @@ public class TrainingManager {
         Tensor envinds = torch.arange(SCALAR_NUM_ENVS, new TensorOptions(device)); // Shape: [numEnvs]
         Tensor flatinds = torch.arange(SCALAR_BATCH_SIZE, new TensorOptions(device)).reshape(args.numSteps, args.numEnvs); // (numSteps*numEnvs,) -> (numSteps, numEnvs)
 
-        LeakProbe.afterGae(iteration);
+        leakLogger.afterGae(iteration);
 
         /*
         clipfracs = []
@@ -907,8 +894,8 @@ public class TrainingManager {
 
         }
 
-        LeakProbe.afterEpochs(iteration);
-        LeakProbe.snapshotDump(iteration);
+        leakLogger.afterEpochs(iteration);
+        leakLogger.snapshotDump(iteration);
 
 
         /*
@@ -939,118 +926,75 @@ public class TrainingManager {
 
         LOGGER.info("==================== Finished Epoch for Iteration:      {} ====================", iteration - 1);
 
+        try (PointerScope scopeLogger = new PointerScope()) {
+            OptimizerOptions options = optimizer.param_groups().get(0).options();
+            double learningRate = options.get_lr();
+            options.close();
 
-        if (iteration % 20 == 0) {
-            SystemStats.HardwareMetrics hw = SystemStats.snapshot(device.index());
+            double valueLoss = vLoss;
+            double policyLoss = pgLoss;
+            double entropyLossDouble = entropyLoss;
 
-            LOGGER.info("GPU: {}% | Mem: {} / {} | Temp: {}C",
-                hw.gpuUtil(),
-                SystemStats.formatBytes(hw.gpuMemUsed()),
-                SystemStats.formatBytes(hw.gpuMemTotal()),
-                hw.gpuTemp()
+            double oldApproxKlVal = oldApproxKl;
+            double approxKlVal = approxKl;
+            double clipfrac = numClipFracs > 0 ? clipFracAccum / numClipFracs : 0;
+            double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
+            double sps = ((args.batchSize) / iterationTime);
+            double averageRewards = rewards.mean().item().toDouble();
+            double totalRewards = rewards.sum().item().toDouble();
+
+            DeviceStats torchStats = torch_cuda.getAllocator().getDeviceStats(device.index());
+            Stat allocatedBytes = torchStats.allocated_bytes();
+            Stat reservedBytes = torchStats.reserved_bytes();
+            Stat activeBytes = torchStats.active_bytes();
+            long heapUsed = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+            trainingLogger.logStep(
+                iteration,
+                learningRate,
+                valueLoss,
+                policyLoss,
+                entropyLossDouble,
+                oldApproxKlVal,
+                approxKlVal,
+                clipfrac,
+                // 0,
+                iterationTime,
+                sps,
+                numTerminations,
+                numTruncations,
+                averageRewards,
+                totalRewards,
+                lastBowSelectedSteps,
+                lastBowDrawingSteps,
+                lastBowFullyDrawnSteps,
+                lastShieldUsingSteps,
+                // hw.gpuMemUsed(),
+                // hw.gpuMemTotal(),
+                // hw.gpuUtil(),
+                // hw.gpuTemp(),
+                allocatedBytes.current(),
+                // hw.torchAllocatedBytesPeak(),
+                reservedBytes.current(),
+                // hw.torchReservedBytesPeak(),
+                activeBytes.current(),
+                // hw.torchActiveBytesPeak(),
+                // hw.torchInactiveSplitBytesCurrent(),
+                // hw.torchInactiveSplitBytesPeak(),
+                // hw.torchRequestedBytesCurrent(),
+                // hw.torchRequestedBytesPeak(),
+                // hw.torchNumAllocRetries(),
+                // hw.torchNumOoms(),
+                Pointer.physicalBytes(),
+                // hw.javaCppRegisteredBytes(),
+                // hw.javaCppRegisteredCount(),
+                heapUsed
+                // hw.osAvailablePhysicalBytes(),
+                // hw.osTotalPhysicalBytes(),
+                // hw.javaCppDeallocatorThreadAlive()
             );
-            LOGGER.info("CPU: {}% | Heap: {} | Native(JNI): {}",
-                hw.cpuLoad(),
-                SystemStats.formatBytes(hw.javaHeapUsed()),
-                SystemStats.formatBytes(hw.javaNativeUsed(), 8)
-            );
-
-            try (PointerScope scopeLogger = new PointerScope()) {
-                OptimizerOptions options = optimizer.param_groups().get(0).options();
-                double learningRate = options.get_lr();
-                options.close();
-
-                double valueLoss = vLoss;
-                double policyLoss = pgLoss;
-                double entropyLossDouble = entropyLoss;
-
-                double oldApproxKlVal = oldApproxKl;
-                double approxKlVal = approxKl;
-                double clipfrac = numClipFracs > 0 ? clipFracAccum / numClipFracs : 0;
-                double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
-                double sps = ((args.batchSize) / iterationTime);
-                double averageRewards = rewards.mean().item().toDouble();
-                double totalRewards = rewards.sum().item().toDouble();
-
-                lastValueLoss = valueLoss;
-                lastPolicyLoss = policyLoss;
-                lastApproxKl = approxKlVal;
-                lastClipFrac = clipfrac;
-                lastIterationTime = iterationTime;
-                lastSps = sps;
-                lastAverageRewards = averageRewards;
-                lastTotalRewards = totalRewards;
-
-                trainingLogger.logStep(
-                    iteration,
-                    learningRate,
-                    valueLoss,
-                    policyLoss,
-                    entropyLossDouble,
-                    oldApproxKlVal,
-                    approxKlVal,
-                    clipfrac,
-                    // explainedVar,
-                    0,
-                    iterationTime,
-                    sps,
-                    numTerminations,
-                    numTruncations,
-                    averageRewards,
-                    totalRewards,
-                    lastBowSelectedSteps,
-                    lastBowDrawingSteps,
-                    lastBowFullyDrawnSteps,
-                    lastShieldUsingSteps,
-                    hw.gpuMemUsed(),
-                    hw.gpuMemTotal(),
-                    hw.gpuUtil(),
-                    hw.gpuTemp(),
-                    hw.torchAllocatedBytesCurrent(),
-                    hw.torchAllocatedBytesPeak(),
-                    hw.torchReservedBytesCurrent(),
-                    hw.torchReservedBytesPeak(),
-                    hw.torchActiveBytesCurrent(),
-                    hw.torchActiveBytesPeak(),
-                    hw.torchInactiveSplitBytesCurrent(),
-                    hw.torchInactiveSplitBytesPeak(),
-                    hw.torchRequestedBytesCurrent(),
-                    hw.torchRequestedBytesPeak(),
-                    hw.torchNumAllocRetries(),
-                    hw.torchNumOoms(),
-                    hw.javaNativeUsed(),
-                    hw.javaCppRegisteredBytes(),
-                    hw.javaCppRegisteredCount(),
-                    hw.javaHeapUsed(),
-                    hw.osAvailablePhysicalBytes(),
-                    hw.osTotalPhysicalBytes(),
-                    hw.javaCppDeallocatorThreadAlive()
-                );
-                LOGGER.info(
-                    "Iteration {}, LR: {}, VLoss: {}, PLoss: {}, Entropy: {}, OldKL: {}, KL: {}, ClipFrac: {}, ExplVar: {}, IterTime: {}s, SPS: {}, AvgRewards: {}, TotRewards: {}, BowSelected: {}, BowDrawing: {}, BowFull: {}, ShieldUsing: {}",
-                    iteration,
-                    learningRate,
-                    valueLoss,
-                    policyLoss,
-                    entropyLossDouble,
-                    oldApproxKlVal,
-                    approxKlVal,
-                    clipfrac,
-                    // explainedVar,
-                    0,
-                    iterationTime,
-                    sps,
-                    averageRewards,
-                    totalRewards,
-                    lastBowSelectedSteps,
-                    lastBowDrawingSteps,
-                    lastBowFullyDrawnSteps,
-                    lastShieldUsingSteps
-                );
-            } catch (Exception e) {
-                LOGGER.error("Failed to log training metrics: {}", e.getMessage());
-            }
-            LOGGER.memory();
+        } catch (Exception e) {
+            LOGGER.error("Failed to log training metrics: {}", e.getMessage());
         }
 
         nextValue.close();
@@ -1069,19 +1013,14 @@ public class TrainingManager {
             initialLSTMState.close();
             initialLSTMState = null;
         }
-        // yPred.close();
-        // yTrue.close();
-
         scope.close();
 
-        LeakProbe.nativeAllocationSnapshot(iteration);
-
-        LeakProbe.iterEnd(iteration);
+        leakLogger.nativeAllocationSnapshot(iteration);
+        leakLogger.iterEnd(iteration);
 
         iteration++;
 
         if (iteration % 100 == 0) {
-            // allocator.snapshot();
             model.saveCheckpoint(iteration);
         }
 
@@ -1092,30 +1031,4 @@ public class TrainingManager {
         }
     }
 
-    public static void reset() {
-        environment.reset();
-    }
-
-    public static int createCheckpoint() {
-        model.saveCheckpoint(iteration);
-        return iteration;
-    }
-
-    public static String getTrainingSummary() {
-        return String.format(
-            "Train: iter=%d step=%d running=%s ready=%s avgR=%.2f totalR=%.2f vLoss=%.4f pLoss=%.4f kl=%.4f clip=%.4f sps=%.1f, lastIterTime=%.2fs",
-            iteration,
-            step,
-            runTraining,
-            environment != null && environment.isReady(),
-            lastAverageRewards,
-            lastTotalRewards,
-            lastValueLoss,
-            lastPolicyLoss,
-            lastApproxKl,
-            lastClipFrac,
-            lastSps,
-            lastIterationTime
-        );
-    }
 }

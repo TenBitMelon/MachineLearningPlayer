@@ -2,7 +2,6 @@ package com.tenbitmelon.machinelearningplayer;
 
 import com.tenbitmelon.machinelearningplayer.agent.Agent;
 import com.tenbitmelon.machinelearningplayer.debugger.Debugger;
-import com.tenbitmelon.machinelearningplayer.debugger.JavaCppDiagnostics;
 import com.tenbitmelon.machinelearningplayer.debugger.Logger;
 import com.tenbitmelon.machinelearningplayer.models.EvaluationManager;
 import com.tenbitmelon.machinelearningplayer.models.TrainingManager;
@@ -30,6 +29,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bytedeco.cuda.presets.cudnn;
 import org.bytedeco.cuda.presets.cupti;
 import org.bytedeco.javacpp.Loader;
+import org.bytedeco.javacpp.Pointer;
 import org.bytedeco.javacpp.presets.javacpp;
 import org.bytedeco.openblas.presets.openblas;
 import org.bytedeco.pytorch.MTIAHooksInterface;
@@ -91,7 +91,12 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
 
         LOGGER = new Logger();
         LOGGER.setEnabled(Level.DEBUG, false);
-        LOGGER.info("JavaCPP config: {}", JavaCppDiagnostics.describeConfiguration());
+        LOGGER.info(
+            "JavaCPP config: maxBytes={}, maxPhysicalBytes={}, nativeAllocationTracer={}",
+            Pointer.maxBytes(),
+            Pointer.maxPhysicalBytes(),
+            System.getProperty("org.bytedeco.javacpp.nativeAllocationTracer")
+        );
 
         PluginManager pluginManager = getServer().getPluginManager();
         pluginManager.registerEvents(this, this);

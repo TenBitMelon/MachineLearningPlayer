@@ -349,7 +349,7 @@ public class EvaluationManager {
         double stepsPerMinute = elapsedMinutes > 0 ? currentStep / elapsedMinutes : 0;
 
         return String.format(
-            "episodes=%d avgReturn=%.2f avgLength=%.2f best=%.2f worst=%.2f last=%s(%.2f/%d) W/L/D/T=%d/%d/%d/%d steps=%d stepsPerMin=%.1f lastDamage=deal %.2f take %.2f lastDist=%.2f",
+            "Evaluation Summary:\nepisodes=%d avgReturn=%.2f avgLength=%.2f best=%.2f worst=%.2f last=%s(%.2f/%d) W/L/D/T=%d/%d/%d/%d steps=%d stepsPerMin=%.1f lastDamage=deal %.2f take %.2f lastDist=%.2f",
             totalEpisodes,
             averageReturn,
             averageEpisodeLength,
