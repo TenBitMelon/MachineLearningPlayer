@@ -41,6 +41,7 @@ public class ExperimentConfig {
     public final int numMinibatches = 4;
     /**
      * The K epochs to update the policy.
+     * > 0
      */
     public final int updateEpochs = 4;
     /**
@@ -70,6 +71,7 @@ public class ExperimentConfig {
     /**
      * The target KL divergence threshold. Can be null if not used.
      */
+    @Nullable
     public final Float targetKl = 0.02f;
     /**
      * The number of parallel game environments.
@@ -185,5 +187,6 @@ public class ExperimentConfig {
         LAYER_NORM,
         LEAK_PROBE,
         ALLOCATOR_SNAPSHOT,
+        MINIMAL_LOGGING
     }
 }

@@ -58,7 +58,7 @@ public class Observation implements AutoCloseable {
         observationData[OFFSET_OPPONENT_LOOK_DIRECTION_VEC + 2] = (float) opponentLookDirectionVec.z;
         System.arraycopy(localHeightMap, 0, observationData, OFFSET_LOCAL_HEIGHT_MAP, SIZE_LOCAL_HEIGHT_MAP);
 
-        this.data = torch.tensor(observationData);
+        this.data = torch.tensor(observationData); // TODO: Don't store observation data as a tensor, store it as a float array and only convert to tensor when needed for model input in a batch to minimize tensor creation overhead
     }
 
     public Observation() {

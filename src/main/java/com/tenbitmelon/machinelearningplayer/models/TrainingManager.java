@@ -429,7 +429,7 @@ public class TrainingManager {
         rawObs.close();
 
         nextTermination.close();
-        Tensor cpuTerminated = Tensor.create(stepResult.terminated());
+        Tensor cpuTerminated = Tensor.create(stepResult.terminated()); // TODO: See if I can reuse tensors and somehow get the data into them faster
         nextTermination = cpuTerminated.to(device, torch.ScalarType.Float);
         cpuTerminated.close();
         nextTermination.retainReference();
@@ -624,15 +624,16 @@ public class TrainingManager {
         for epoch in range(args.update_epochs):
             */
 
-        double clipFracAccum = 0;
+        Tensor vLossTensor = null;
+        Tensor pgLossTensor = null;
+        Tensor entropyLossTensor = null;
+
+        Tensor approxKlTensor = null;
+        Tensor oldApproxKlTensor = null;
+        Tensor clipFracTensor = torch.zeros(new long[]{1}, new TensorOptions(device));
         int numClipFracs = 0;
 
-        double vLoss = 0;
-        double pgLoss = 0;
-        double entropyLoss = 0;
         double approxKl = 0;
-        double oldApproxKl = 0;
-
 
         for (int epoch = 0; epoch < args.updateEpochs; epoch++) {
             PointerScope epochScope = new PointerScope();
@@ -708,34 +709,25 @@ public class TrainingManager {
 
                 AutogradState.get_tls_state().set_grad_mode(false); // with torch.no_grad():
 
-                Tensor oldApproxKlTensor = logRatio.neg().mean();
+                if (oldApproxKlTensor != null) oldApproxKlTensor.close();
+                oldApproxKlTensor = logRatio.neg().mean();
                 Tensor ratioSub = ratio.sub(SCALAR_ONE);
                 Tensor subLogRa = ratioSub.sub(logRatio);
-                Tensor approxKlTensor = subLogRa.mean();
+                if (approxKlTensor != null) approxKlTensor.close();
+                approxKlTensor = subLogRa.mean();
                 Tensor subAbs = ratioSub.abs();
                 Tensor subAbsGT = subAbs.gt(SCALAR_CLIP_COEF);
                 Tensor toFloat = subAbsGT.to(torch.ScalarType.Float);
-                Tensor clipFracTensor = toFloat.mean();
-
-                Scalar oldApproxKlScalar = oldApproxKlTensor.item();
-                oldApproxKl = oldApproxKlScalar.toDouble();
-                oldApproxKlScalar.close();
-                Scalar approxKlScalar = approxKlTensor.item();
-                approxKl = approxKlScalar.toDouble();
-                approxKlScalar.close();
-                Scalar clipFracScalar = clipFracTensor.item();
-                clipFracAccum += clipFracScalar.toDouble();
-                clipFracScalar.close();
+                Tensor floatMean = toFloat.mean();
+                clipFracTensor.add_(floatMean);
                 numClipFracs++;
 
-                oldApproxKlTensor.close();
+                floatMean.close();
                 ratioSub.close();
                 subLogRa.close();
-                approxKlTensor.close();
                 subAbs.close();
                 subAbsGT.close();
                 toFloat.close();
-                clipFracTensor.close();
 
                 AutogradState.get_tls_state().set_grad_mode(true);
 
@@ -773,7 +765,8 @@ public class TrainingManager {
                 Tensor pgLoss2 = mbAdvantages.neg().mul(
                     torch.clamp(ratio, SCALAR_1_SUB_CLIP_COEF, SCALAR_1_ADD_CLIP_COEF)
                 );
-                Tensor pgLossTensor = torch.max(pgLoss1, pgLoss2).mean();
+                if (pgLossTensor != null) pgLossTensor.close();
+                pgLossTensor = torch.max(pgLoss1, pgLoss2).mean();
 
                 /*
                 newvalue = newvalue.view(-1)
@@ -788,7 +781,7 @@ public class TrainingManager {
                 Tensor bValueMbInds = bValues.index_select(0, mb_inds); // (numSteps*numEnvs,) -> (batchSize,)
 
 
-                Tensor vLossTensor;
+                if (vLossTensor != null) vLossTensor.close();
 
                 if (args.clipVloss) {
                     /*
@@ -833,7 +826,8 @@ public class TrainingManager {
                 loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
                 */
 
-                Tensor entropyLossTensor = actionAndValueResult.totalEntropy().mean();
+                if (entropyLossTensor != null) entropyLossTensor.close();
+                entropyLossTensor = actionAndValueResult.totalEntropy().mean();
                 Tensor loss = pgLossTensor.sub(
                     entropyLossTensor.mul(SCALAR_ENT_COEF)
                 ).add(
@@ -865,18 +859,11 @@ public class TrainingManager {
                 bValueMbInds.close();
                 loss.close();
 
-                Scalar vLossScalar = vLossTensor.item();
-                vLoss = vLossScalar.toDouble();
-                vLossScalar.close();
-                Scalar pgLossScalar = pgLossTensor.item();
-                pgLoss = pgLossScalar.toDouble();
-                pgLossScalar.close();
-                Scalar entropyLossScalar = entropyLossTensor.item();
-                entropyLoss = entropyLossScalar.toDouble();
-                entropyLossScalar.close();
-                vLossTensor.close();
-                pgLossTensor.close();
-                entropyLossTensor.close();
+                approxKlTensor.retainReference();
+                oldApproxKlTensor.retainReference();
+                vLossTensor.retainReference();
+                pgLossTensor.retainReference();
+                entropyLossTensor.retainReference();
 
                 batchScope.close();
             }
@@ -887,6 +874,12 @@ public class TrainingManager {
             if args.target_kl is not None and approx_kl > args.target_kl:
                 break
              */
+
+            Scalar approxKLScalar = approxKlTensor.item();
+            approxKl = approxKLScalar.toDouble();
+            approxKLScalar.close();
+            approxKlTensor.close();
+
             if (args.targetKl != null && approxKl > args.targetKl) {
                 LOGGER.warn("Target KL ({}) exceeded ({}). Breaking from update epochs.", args.targetKl, approxKl);
                 break;
@@ -894,109 +887,100 @@ public class TrainingManager {
 
         }
 
-        leakLogger.afterEpochs(iteration);
-        leakLogger.snapshotDump(iteration);
-
-
-        /*
-        y_pred, y_true = b_values.cpu().numpy(), b_returns.cpu().numpy()
-        var_y = np.var(y_true)
-        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
-         */
-        // Tensor yPred = bValues.cpu();
-        // Tensor yTrue = bReturns.cpu();
-        // double varY = yTrue.var().item().toDouble();
-        // double explainedVar;
-        // if (varY == 0) {
-        //     explainedVar = Double.NaN;
-        // } else {
-        //     Scalar scalar = new Scalar(varY);
-        //     Tensor sub = yTrue.sub(yPred);
-        //     Tensor var = sub.var();
-        //     Tensor div = var.div(scalar);
-        //     Scalar item = div.item();
-        //     explainedVar = 1.0 - item.toDouble();
-        //
-        //     scalar.close();
-        //     sub.close();
-        //     var.close();
-        //     div.close();
-        //     item.close();
-        // }
-
         LOGGER.info("==================== Finished Epoch for Iteration:      {} ====================", iteration - 1);
 
-        try (PointerScope scopeLogger = new PointerScope()) {
-            OptimizerOptions options = optimizer.param_groups().get(0).options();
-            double learningRate = options.get_lr();
-            options.close();
+        if (!args.featureFlags.contains(ExperimentConfig.FeatureFlag.MINIMAL_LOGGING)) {
 
-            double valueLoss = vLoss;
-            double policyLoss = pgLoss;
-            double entropyLossDouble = entropyLoss;
+            leakLogger.afterEpochs(iteration);
+            leakLogger.snapshotDump(iteration);
 
-            double oldApproxKlVal = oldApproxKl;
-            double approxKlVal = approxKl;
-            double clipfrac = numClipFracs > 0 ? clipFracAccum / numClipFracs : 0;
-            double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
-            double sps = ((args.batchSize) / iterationTime);
-            double averageRewards = rewards.mean().item().toDouble();
-            double totalRewards = rewards.sum().item().toDouble();
+            try (PointerScope scopeLogger = new PointerScope()) {
+                Scalar oldApproxKlScalar = oldApproxKlTensor.item();
+                double oldApproxKl = oldApproxKlScalar.toDouble();
+                oldApproxKlScalar.close();
+                Scalar vLossScalar = vLossTensor.item();
+                double vLoss = vLossScalar.toDouble();
+                vLossScalar.close();
+                Scalar pgLossScalar = pgLossTensor.item();
+                double pgLoss = pgLossScalar.toDouble();
+                pgLossScalar.close();
+                Scalar entropyLossScalar = entropyLossTensor.item();
+                double entropyLoss = entropyLossScalar.toDouble();
+                entropyLossScalar.close();
+                Scalar clipFracScalar = clipFracTensor.item();
+                double clipFracAccum = clipFracScalar.toDouble();
+                clipFracScalar.close();
 
-            DeviceStats torchStats = torch_cuda.getAllocator().getDeviceStats(device.index());
-            Stat allocatedBytes = torchStats.allocated_bytes();
-            Stat reservedBytes = torchStats.reserved_bytes();
-            Stat activeBytes = torchStats.active_bytes();
-            long heapUsed = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+                OptimizerOptions options = optimizer.param_groups().get(0).options();
+                double learningRate = options.get_lr();
+                options.close();
 
-            trainingLogger.logStep(
-                iteration,
-                learningRate,
-                valueLoss,
-                policyLoss,
-                entropyLossDouble,
-                oldApproxKlVal,
-                approxKlVal,
-                clipfrac,
-                // 0,
-                iterationTime,
-                sps,
-                numTerminations,
-                numTruncations,
-                averageRewards,
-                totalRewards,
-                lastBowSelectedSteps,
-                lastBowDrawingSteps,
-                lastBowFullyDrawnSteps,
-                lastShieldUsingSteps,
-                // hw.gpuMemUsed(),
-                // hw.gpuMemTotal(),
-                // hw.gpuUtil(),
-                // hw.gpuTemp(),
-                allocatedBytes.current(),
-                // hw.torchAllocatedBytesPeak(),
-                reservedBytes.current(),
-                // hw.torchReservedBytesPeak(),
-                activeBytes.current(),
-                // hw.torchActiveBytesPeak(),
-                // hw.torchInactiveSplitBytesCurrent(),
-                // hw.torchInactiveSplitBytesPeak(),
-                // hw.torchRequestedBytesCurrent(),
-                // hw.torchRequestedBytesPeak(),
-                // hw.torchNumAllocRetries(),
-                // hw.torchNumOoms(),
-                Pointer.physicalBytes(),
-                // hw.javaCppRegisteredBytes(),
-                // hw.javaCppRegisteredCount(),
-                heapUsed
-                // hw.osAvailablePhysicalBytes(),
-                // hw.osTotalPhysicalBytes(),
-                // hw.javaCppDeallocatorThreadAlive()
-            );
-        } catch (Exception e) {
-            LOGGER.error("Failed to log training metrics: {}", e.getMessage());
+                double clipFrac = numClipFracs > 0 ? clipFracAccum / numClipFracs : 0;
+                double iterationTime = ((System.currentTimeMillis() - iterationStartTime) / 1000.0);
+                double sps = ((args.batchSize) / iterationTime);
+                double averageRewards = rewards.mean().item().toDouble();
+                double totalRewards = rewards.sum().item().toDouble();
+
+                DeviceStats torchStats = torch_cuda.getAllocator().getDeviceStats(device.index());
+                Stat allocatedBytes = torchStats.allocated_bytes();
+                Stat reservedBytes = torchStats.reserved_bytes();
+                Stat activeBytes = torchStats.active_bytes();
+                long heapUsed = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+
+                trainingLogger.logStep(
+                    iteration,
+                    learningRate,
+                    vLoss,
+                    pgLoss,
+                    entropyLoss,
+                    oldApproxKl,
+                    approxKl,
+                    clipFrac,
+                    // 0,
+                    iterationTime,
+                    sps,
+                    numTerminations,
+                    numTruncations,
+                    averageRewards,
+                    totalRewards,
+                    lastBowSelectedSteps,
+                    lastBowDrawingSteps,
+                    lastBowFullyDrawnSteps,
+                    lastShieldUsingSteps,
+                    // hw.gpuMemUsed(),
+                    // hw.gpuMemTotal(),
+                    // hw.gpuUtil(),
+                    // hw.gpuTemp(),
+                    allocatedBytes.current(),
+                    // hw.torchAllocatedBytesPeak(),
+                    reservedBytes.current(),
+                    // hw.torchReservedBytesPeak(),
+                    activeBytes.current(),
+                    // hw.torchActiveBytesPeak(),
+                    // hw.torchInactiveSplitBytesCurrent(),
+                    // hw.torchInactiveSplitBytesPeak(),
+                    // hw.torchRequestedBytesCurrent(),
+                    // hw.torchRequestedBytesPeak(),
+                    // hw.torchNumAllocRetries(),
+                    // hw.torchNumOoms(),
+                    Pointer.physicalBytes(),
+                    // hw.javaCppRegisteredBytes(),
+                    // hw.javaCppRegisteredCount(),
+                    heapUsed
+                    // hw.osAvailablePhysicalBytes(),
+                    // hw.osTotalPhysicalBytes(),
+                    // hw.javaCppDeallocatorThreadAlive()
+                );
+            } catch (Exception e) {
+                LOGGER.error("Failed to log training metrics: {}", e.getMessage());
+            }
         }
 
+        oldApproxKlTensor.close();
+        vLossTensor.close();
+        pgLossTensor.close();
+        entropyLossTensor.close();
+        clipFracTensor.close();
         nextValue.close();
         lastGAELam.close();
         returns.close();
@@ -1015,8 +999,11 @@ public class TrainingManager {
         }
         scope.close();
 
-        leakLogger.nativeAllocationSnapshot(iteration);
-        leakLogger.iterEnd(iteration);
+
+        if (!args.featureFlags.contains(ExperimentConfig.FeatureFlag.MINIMAL_LOGGING)) {
+            leakLogger.nativeAllocationSnapshot(iteration);
+            leakLogger.iterEnd(iteration);
+        }
 
         iteration++;
 

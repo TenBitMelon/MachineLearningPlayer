@@ -215,6 +215,7 @@ public final class MachineLearningPlayer extends JavaPlugin implements Listener 
         world.setGameRule(GameRule.DO_TILE_DROPS, false);
         world.setGameRule(GameRule.DO_INSOMNIA, false);
         world.setGameRule(GameRule.DO_IMMEDIATE_RESPAWN, true);
+        world.setGameRule(GameRule.KEEP_INVENTORY, true);
 
         for (Entity entity : world.getEntities()) {
             if (entity instanceof Player player) {

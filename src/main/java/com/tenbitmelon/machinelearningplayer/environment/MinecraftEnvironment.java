@@ -433,8 +433,8 @@ public class MinecraftEnvironment {
         float reward = 0.0f;
 
         reward += 0.05f * damageDealt;
-        reward += -0.02f * damageTaken;
-        // reward += -0.001f; // timestep cost
+        reward += -0.05f * damageTaken;
+        reward += -0.001f; // timestep cost
 
 
         // // Reward shooting a bow
@@ -445,21 +445,21 @@ public class MinecraftEnvironment {
 
         if (myHealth <= 0 && targetHealth > 0) {
             // I LOST (I died, other is still up)
-            reward += -10.0f;
+            reward += -5.0f;
             terminated = true;
         } else if (myHealth > 0 && targetHealth <= 0) {
             // I WON (I am alive, other died)
-            reward += 10.0f;
+            reward += 5.0f;
             terminated = true;
         } else if (myHealth <= 0 && targetHealth <= 0) {
             // DRAW / DOUBLE KO (Both died in the same tick)
-            reward += -5.0f; // Penalty for dying, but not as bad as losing outright
+            reward += -1.0f; // Penalty for dying, but not as bad as losing outright
             terminated = true;
         }
         //
-        // if (distanceTo < 3.0f) {
-        //     reward += 0.001f; // small reward for being close to the target
-        // }
+        if (distanceTo < 3.0f) {
+            reward += 0.001f; // small reward for being close to the target
+        }
         // if (distanceTo > 1.5f) {
         //     reward += deltaDistance * 0.001f;
         // }

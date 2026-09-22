@@ -13,7 +13,7 @@ public class Categorical implements AutoCloseable {
     private final long numEvents;
     private final LongArrayRef batchSize;
 
-    public Categorical(Tensor logits) {
+    public Categorical(Tensor logits) { // TODO: Make into or a version that works in batches so all of the actions can be sampled at once
         this.logits = logits.sub(logits.logsumexp(new long[]{-1}, true));
 
         this.probs = torch.softmax(this.logits, -1);

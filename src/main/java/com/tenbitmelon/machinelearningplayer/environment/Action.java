@@ -31,7 +31,7 @@ public class Action implements AutoCloseable {
         this.data = data;
 
         this.cachedData = data
-            .contiguous()
+            // .contiguous()
             .data_ptr_float();
     }
 
