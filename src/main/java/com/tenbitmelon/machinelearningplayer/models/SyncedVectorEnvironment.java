@@ -68,7 +68,7 @@ public class SyncedVectorEnvironment {
     public VectorStepResult postTickStep(MinecraftRL model, MinecraftRL.LSTMState nextLstmState, Device device) {
         // LOGGER.debug("Post tick stepping in SyncedVectorEnvironment");
         Observation[] observations = new Observation[numEnvs];
-        double[] rewards = new double[numEnvs];
+        float[] rewards = new float[numEnvs];
 
         boolean[] terminated = new boolean[numEnvs];
         boolean[] truncated = new boolean[numEnvs];

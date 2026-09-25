@@ -6,26 +6,26 @@ import org.bytedeco.pytorch.Tensor;
 
 public class Action implements AutoCloseable {
 
-    private static final int SIZE_JUMPING = 1;
-    private static final int SIZE_SPRINTING_SNEAKING = 1;
-    private static final int SIZE_LOOK_CHANGE = 2;
-    private static final int SIZE_FORWARD_MOVE_KEY = 1;
-    private static final int SIZE_STRAFE_MOVE_KEY = 1;
-    private static final int SIZE_ATTACK_USE_ITEM = 1;
-    private static final int SIZE_SLOT_CHANGE = 1;
+    public static final int SIZE_JUMPING = 1;
+    public static final int SIZE_SPRINTING_SNEAKING = 1;
+    public static final int SIZE_FORWARD_MOVE_KEY = 1;
+    public static final int SIZE_STRAFE_MOVE_KEY = 1;
+    public static final int SIZE_ATTACK_USE_ITEM = 1;
+    public static final int SIZE_SLOT_CHANGE = 1;
+    public static final int SIZE_LOOK_CHANGE = 2;
 
-    private static final int OFFSET_JUMPING = 0;
-    private static final int OFFSET_SPRINTING_SNEAKING = OFFSET_JUMPING + SIZE_JUMPING;
-    private static final int OFFSET_LOOK_CHANGE = OFFSET_SPRINTING_SNEAKING + SIZE_SPRINTING_SNEAKING;
-    private static final int OFFSET_FORWARD_MOVE_KEY = OFFSET_LOOK_CHANGE + SIZE_LOOK_CHANGE;
-    private static final int OFFSET_STRAFE_MOVE_KEY = OFFSET_FORWARD_MOVE_KEY + SIZE_FORWARD_MOVE_KEY;
-    private static final int OFFSET_ATTACK_USE_ITEM = OFFSET_STRAFE_MOVE_KEY + SIZE_STRAFE_MOVE_KEY;
-    private static final int OFFSET_SLOT_CHANGE = OFFSET_ATTACK_USE_ITEM + SIZE_ATTACK_USE_ITEM;
+    public static final int OFFSET_JUMPING = 0;
+    public static final int OFFSET_SPRINTING_SNEAKING = OFFSET_JUMPING + SIZE_JUMPING;
+    public static final int OFFSET_FORWARD_MOVE_KEY = OFFSET_SPRINTING_SNEAKING + SIZE_SPRINTING_SNEAKING;
+    public static final int OFFSET_STRAFE_MOVE_KEY = OFFSET_FORWARD_MOVE_KEY + SIZE_FORWARD_MOVE_KEY;
+    public static final int OFFSET_ATTACK_USE_ITEM = OFFSET_STRAFE_MOVE_KEY + SIZE_STRAFE_MOVE_KEY;
+    public static final int OFFSET_SLOT_CHANGE = OFFSET_ATTACK_USE_ITEM + SIZE_ATTACK_USE_ITEM;
+    public static final int OFFSET_LOOK_CHANGE = OFFSET_SLOT_CHANGE + SIZE_SLOT_CHANGE;
 
-    public static final int ACTION_SPACE_SIZE = OFFSET_SLOT_CHANGE + SIZE_SLOT_CHANGE;
+    public static final int ACTION_SPACE_SIZE = OFFSET_LOOK_CHANGE + SIZE_LOOK_CHANGE;
 
     final Tensor data;
-    private FloatPointer cachedData;
+    private final FloatPointer cachedData;
 
     public Action(Tensor data) {
         this.data = data;

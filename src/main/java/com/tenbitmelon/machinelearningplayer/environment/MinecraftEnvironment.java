@@ -422,7 +422,7 @@ public class MinecraftEnvironment {
         float damageDealt = lastKnownTargetHealth - targetHealth;
         lastKnownTargetHealth = targetHealth;
 
-        double distanceTo = agent.position().distanceTo(targetEntity.position());
+        float distanceTo = (float) agent.position().distanceTo(targetEntity.position());
         if (lastKnownDistanceToTarget == 0.0f) {
             lastKnownDistanceToTarget = (float) distanceTo;
         }

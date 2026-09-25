@@ -428,28 +428,21 @@ public class TrainingManager {
         nextObs.retainReference();
         rawObs.close();
 
+        TensorOptions tensorOptions = new TensorOptions().device(new DeviceOptional(device)).dtype(new ScalarTypeOptional(torch.ScalarType.Float));
+
         nextTermination.close();
-        Tensor cpuTerminated = Tensor.create(stepResult.terminated()); // TODO: See if I can reuse tensors and somehow get the data into them faster
-        nextTermination = cpuTerminated.to(device, torch.ScalarType.Float);
-        cpuTerminated.close();
+        nextTermination = torch.tensor(stepResult.terminatedInt(), tensorOptions);
         nextTermination.retainReference();
 
-
         nextTruncation.close();
-        Tensor cpuTruncated = Tensor.create(stepResult.truncated());
-        nextTruncation = cpuTruncated.to(device, torch.ScalarType.Float);
-        cpuTruncated.close();
+        nextTruncation = torch.tensor(stepResult.truncatedInt(), tensorOptions);
         nextTruncation.retainReference();
 
-        Tensor cpuStepRewards = Tensor.create(stepResult.rewards());
-        Tensor gpuStepRewards = cpuStepRewards.to(device, torch.ScalarType.Float);
-        Tensor newRewardsTensor = gpuStepRewards.view(-1); // (numEnvs,) -> (numEnvs,)
+        Tensor stepRewards = torch.tensor(stepResult.rewards(), tensorOptions); // (numEnvs,)
         try (Tensor rewardSlice = rewards.get(step)) {
-            rewardSlice.copy_(newRewardsTensor);
+            rewardSlice.copy_(stepRewards);
         }
-        newRewardsTensor.close();
-        gpuStepRewards.close();
-        cpuStepRewards.close();
+        stepRewards.close();
 
         nextValuePreReset.close();
         nextValuePreReset = stepResult.nextValuePreReset();

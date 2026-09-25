@@ -2,14 +2,14 @@ package com.tenbitmelon.machinelearningplayer.environment;
 
 public record StepResult(
     Observation observation,
-    double reward,
+    float reward,
     boolean terminated,
     boolean truncated,
     float myHealth,
     float targetHealth,
     float damageTaken,
     float damageDealt,
-    double distanceToTarget,
+    float distanceToTarget,
     boolean bowSelected,
     boolean bowDrawing,
     boolean bowFullyDrawn,

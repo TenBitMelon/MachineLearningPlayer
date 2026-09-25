@@ -46,6 +46,8 @@ dependencies {
 
     implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.193524-13")
     implementation("org.bytedeco:pytorch:2.7.1-1.5.12-20250613.193524-13:windows-x86_64-gpu")
+//    implementation("org.bytedeco:pytorch:2.10.0-1.5.13")
+//    implementation("org.bytedeco:pytorch:2.10.0-1.5.13:windows-x86_64-gpu")
 
 //    implementation("org.bytedeco:cuda:12.9-9.10-1.5.12-20250612.145546-3:windows-x86_64-redist")
     // cuda-12.9-9.10-1.5.12-20250612.145546-3.jar

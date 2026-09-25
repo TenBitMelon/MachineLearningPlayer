@@ -1,5 +1,6 @@
 package com.tenbitmelon.machinelearningplayer.util.distributions;
 
+import org.bytedeco.pytorch.NoGradGuard;
 import org.bytedeco.pytorch.Scalar;
 import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.global.torch;
@@ -35,12 +36,14 @@ public class Normal implements AutoCloseable {
             return torch.normal(self.loc.expand(shape), self.scale.expand(shape))
      */
     public Tensor sample() {
-        Tensor expandedLoc = this.loc.expand(batch_shape);
-        Tensor expandedScale = this.scale.expand(batch_shape);
-        Tensor sample = torch.normal(expandedLoc, expandedScale);
-        expandedLoc.close();
-        expandedScale.close();
-        return sample;
+        try (NoGradGuard noGrad = new NoGradGuard()) {
+            Tensor expandedLoc = this.loc.expand(batch_shape);
+            Tensor expandedScale = this.scale.expand(batch_shape);
+            Tensor sample = torch.normal(expandedLoc, expandedScale);
+            expandedLoc.close();
+            expandedScale.close();
+            return sample;
+        }
     }
 
     /*

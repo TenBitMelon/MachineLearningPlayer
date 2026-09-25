@@ -5,7 +5,7 @@ import org.bytedeco.pytorch.Tensor;
 import org.bytedeco.pytorch.TensorVector;
 import org.bytedeco.pytorch.global.torch;
 
-public record VectorStepResult(Observation[] observations, double[] rewards, boolean[] terminated,
+public record VectorStepResult(Observation[] observations, float[] rewards, boolean[] terminated,
                                boolean[] truncated, int bowSelectedSteps, int bowDrawingSteps,
                                int bowFullyDrawnSteps, int shieldUsingSteps,
                                Tensor nextValuePreReset) implements AutoCloseable {
@@ -53,20 +53,20 @@ public record VectorStepResult(Observation[] observations, double[] rewards, boo
         return count;
     }
 
-    public int bowSelectedSteps() {
-        return bowSelectedSteps;
+    public int[] terminatedInt() {
+        int[] terminatedInt = new int[terminated.length];
+        for (int i = 0; i < terminated.length; i++) {
+            terminatedInt[i] = terminated[i] ? 1 : 0;
+        }
+        return terminatedInt;
     }
 
-    public int bowDrawingSteps() {
-        return bowDrawingSteps;
-    }
-
-    public int bowFullyDrawnSteps() {
-        return bowFullyDrawnSteps;
-    }
-
-    public int shieldUsingSteps() {
-        return shieldUsingSteps;
+    public int[] truncatedInt() {
+        int[] truncatedInt = new int[truncated.length];
+        for (int i = 0; i < truncated.length; i++) {
+            truncatedInt[i] = truncated[i] ? 1 : 0;
+        }
+        return truncatedInt;
     }
 
     @Override

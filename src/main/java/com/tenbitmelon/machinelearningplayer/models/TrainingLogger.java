@@ -10,7 +10,6 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
-import java.util.UUID;
 
 public class TrainingLogger {
     private final BufferedWriter writer;
@@ -65,7 +64,7 @@ public class TrainingLogger {
                 // "torch_requested_bytes_peak",
                 // "torch_num_alloc_retries",
                 // "torch_num_ooms",
-                "java_native_used",
+                "javacpp_physical_bytes",
                 // "javacpp_registered_bytes",
                 // "javacpp_registered_count",
                 "java_heap_used"
@@ -126,7 +125,7 @@ public class TrainingLogger {
         // long torchRequestedBytesPeak,
         // long torchNumAllocRetries,
         // long torchNumOoms,
-        long javaNativeUsed,
+        long javaCPPPhysicalBytes,
         // long javaCppRegisteredBytes,
         // long javaCppRegisteredCount,
         long javaHeapUsed
@@ -172,7 +171,7 @@ public class TrainingLogger {
             // Long.toString(torchRequestedBytesPeak),
             // Long.toString(torchNumAllocRetries),
             // Long.toString(torchNumOoms),
-            Long.toString(javaNativeUsed),
+            Long.toString(javaCPPPhysicalBytes),
             // Long.toString(javaCppRegisteredBytes),
             // Long.toString(javaCppRegisteredCount),
             Long.toString(javaHeapUsed),

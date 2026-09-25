@@ -12,8 +12,12 @@ import org.bytedeco.pytorch.global.torch;
 
 import javax.annotation.Nullable;
 import java.io.File;
+import java.util.Arrays;
 
 import static com.tenbitmelon.machinelearningplayer.MachineLearningPlayer.LOGGER;
+import static com.tenbitmelon.machinelearningplayer.environment.Action.OFFSET_LOOK_CHANGE;
+import static com.tenbitmelon.machinelearningplayer.environment.Action.SIZE_LOOK_CHANGE;
+import static com.tenbitmelon.machinelearningplayer.util.Utils.tensorString;
 
 public class MinecraftRL extends Module {
 
@@ -22,19 +26,15 @@ public class MinecraftRL extends Module {
     final ExperimentConfig args;
     final SequentialImpl network;
     final LSTMImpl lstm;
-    final LinearImpl actorForwardMoveKeys;
-    final LinearImpl actorStrafingMoveKeys;
-    final LinearImpl yawMean;
-    final Tensor yawLogSTD;
-    final LinearImpl pitchMean;
-    final Tensor pitchLogSTD;
-    final LinearImpl actorJumpKey;
-    final LinearImpl actorSprintSneakKeys;
-    final LinearImpl critic;
-    final LinearImpl actorAttackUseItem;
-    final Device device;
     final SequentialImpl localHeightmapConv;
-    final LinearImpl actorSlot;
+    final LinearImpl actorCategorical;
+    final int actorCategoricalSize;
+    final int actor3CategorySize;
+    final int actor2CategorySize;
+    final LinearImpl actorContinuousMeans;
+    final Tensor actorContinuousLogSTD;
+    final LinearImpl critic;
+    final Device device;
 
     public MinecraftRL(ExperimentConfig args, Device device) {
         this.device = device;
@@ -141,55 +141,31 @@ public class MinecraftRL extends Module {
         /*
         self.x_actor = layer_init(nn.Linear(64, 3), std=0.01)
         self.y_actor = layer_init(nn.Linear(64, 3), std=0.01)
-        */
 
-        LinearImpl actorForwardMoveKeys = createLinearLayer(lstmSize, 3, 0.01, device);
-        register_module("actor_forward_move_keys", actorForwardMoveKeys);
-        this.actorForwardMoveKeys = actorForwardMoveKeys;
-
-        LinearImpl actorStrafingMoveKeys = createLinearLayer(lstmSize, 3, 0.01, device);
-        register_module("actor_strafing_move_keys", actorStrafingMoveKeys);
-        this.actorStrafingMoveKeys = actorStrafingMoveKeys;
-
-        /*
         self.rot_mean = layer_init(nn.Linear(64, 1), std=0.01)
         self.rot_logstd = nn.Parameter(torch.ones(1) * -1.0)
         */
 
-        LinearImpl yawMean = createLinearLayer(lstmSize, 1, 0.01, device);
-        register_module("yaw_mean", yawMean);
-        this.yawMean = yawMean;
-        Tensor yawLogSTD = torch.ones(new long[]{1}, new TensorOptions(torch.ScalarType.Float)).mul(new Scalar(-1.0f));
-        register_parameter("yaw_logstd", yawLogSTD);
-        this.yawLogSTD = yawLogSTD;
+        this.actor3CategorySize =
+            3 + // Forward Move Keys
+                3 + // Strafing Move Keys
+                3 + // Sprint & Sneak Keys | no sprint/sneak, sprint, sneak
+                3; // Attack & Use Item | no attack/use, attack, use
+        this.actor2CategorySize = 2 + // Jump Key | no jump, jump
+            2; // Slot | slot 0, slot 1
+        this.actorCategoricalSize = this.actor3CategorySize + this.actor2CategorySize + 2;
 
-        LinearImpl pitchMean = createLinearLayer(lstmSize, 1, 0.01, device);
-        register_module("pitch_mean", pitchMean);
-        this.pitchMean = pitchMean;
-        Tensor pitchLogSTD = torch.ones(new long[]{1}, new TensorOptions(torch.ScalarType.Float)).mul(new Scalar(-1.0f));
-        register_parameter("pitch_logstd", pitchLogSTD);
-        this.pitchLogSTD = pitchLogSTD;
+        LinearImpl actorCategorical = createLinearLayer(lstmSize, actorCategoricalSize, 0.01, device);
+        register_module("actor_outputs", actorCategorical);
+        this.actorCategorical = actorCategorical;
 
-        // Jump
-        LinearImpl actorJumpKey = createLinearLayer(lstmSize, 2, 0.01, device); // 2 outputs: jump or not jump
-        register_module("actor_jump_key", actorJumpKey);
-        this.actorJumpKey = actorJumpKey;
+        LinearImpl actorContinuousMeans = createLinearLayer(lstmSize, 2, 0.01, device); // yaw mean and pitch mean
+        register_module("actor_continuous_means", actorContinuousMeans);
+        this.actorContinuousMeans = actorContinuousMeans;
 
-        // Sprint & Sneak
-
-        LinearImpl actorSprintSneakKeys = createLinearLayer(lstmSize, 3, 0.01, device); // 3 outputs: no sprint/sneak, sprint, sneak
-        register_module("actor_sprint_sneak_keys", actorSprintSneakKeys);
-        this.actorSprintSneakKeys = actorSprintSneakKeys;
-
-        // Attack & Use
-        LinearImpl actorAttackUseItem = createLinearLayer(lstmSize, 3, 0.01, device); // 3 outputs: no attack/use, attack, use
-        register_module("actor_attack_use_item", actorAttackUseItem);
-        this.actorAttackUseItem = actorAttackUseItem;
-
-        // Slot 0 or 1
-        LinearImpl actorSlot = createLinearLayer(lstmSize, 2, 0.01, device); // 2 outputs: slot 0 or slot 1
-        register_module("actor_slot", actorSlot);
-        this.actorSlot = actorSlot;
+        Tensor continuousLogSTD = torch.ones(new long[]{2}, new TensorOptions(torch.ScalarType.Float)).mul(new Scalar(-1.0f));
+        register_parameter("actor_continuous_logstd", continuousLogSTD);
+        this.actorContinuousLogSTD = continuousLogSTD;
 
         /*
         self.critic = layer_init(nn.Linear(64, 1), std=1)
@@ -445,25 +421,36 @@ public class MinecraftRL extends Module {
         hidden, lstm_state = self.get_states(x, lstm_state, done)
          */
         States states = this.getStates(observation, lstmState, done);
-        Tensor hidden = states.newHiddenTensor;
+        Tensor hidden = states.newHiddenTensor; // (seqLen * batchSize, input_size)
 
         PointerScope scope = new PointerScope();
 
         /*
         x_logits = self.x_actor(hidden)
         y_logits = self.y_actor(hidden)
-         */
-
-        Tensor forwardMoveKeysLogits = this.actorForwardMoveKeys.forward(hidden);
-        Tensor strafingMoveKeysLogits = this.actorStrafingMoveKeys.forward(hidden);
-
-        /*
         x_probs = Categorical(logits=x_logits)
         y_probs = Categorical(logits=y_logits)
          */
 
-        Categorical forwardMoveKeysProbs = new Categorical(forwardMoveKeysLogits);
-        Categorical strafingMoveKeysProbs = new Categorical(strafingMoveKeysLogits);
+        Tensor actorOutputLogits = this.actorCategorical.forward(hidden);// (batchSize, actorOutputSize)
+
+        Tensor action3Logits = actorOutputLogits.narrow(-1, 0, actor3CategorySize); // (batchSize, actor3CategorySize)
+        Tensor action3LogitsShaped = action3Logits.reshape(-1, actor3CategorySize / 3, 3); // (batchSize, actor3CategorySize/3, 3)
+
+        Tensor action2Logits = actorOutputLogits.narrow(-1, actor3CategorySize, actor2CategorySize); // (batchSize, actor2CategorySize)
+        Tensor action2LogitsShaped = action2Logits.reshape(-1, actor2CategorySize / 2, 2); // (batchSize, actor2CategorySize/2, 2)
+        Tensor action2LogitsPadded = torch.pad(action2LogitsShaped, new long[]{0, 1}, "constant", new DoubleOptional(-Double.MIN_VALUE));
+
+        Tensor actionLogitsCombined = torch.cat(new TensorVector(action3LogitsShaped, action2LogitsPadded), 1); // (batchSize, actor3CategorySize/3 + actor2CategorySize/2, 3)
+        Categorical categoricalActionsProbs = new Categorical(actionLogitsCombined);
+
+        actorOutputLogits.close();
+        action3Logits.close();
+        action3LogitsShaped.close();
+        action2Logits.close();
+        action2LogitsShaped.close();
+        action2LogitsPadded.close();
+        actionLogitsCombined.close();
 
         /*
         rot_mean = self.rot_mean(hidden).squeeze(-1)  # (batch,)
@@ -471,36 +458,10 @@ public class MinecraftRL extends Module {
         rot_dist = Normal(rot_mean, rot_std)
          */
 
-        Tensor yMeanForward = this.yawMean.forward(hidden);
-        Tensor yawMean = yMeanForward.squeeze(-1); // (batch, 1) -> (batch,)
-        Tensor yawStd = torch.exp(torch.clamp(this.yawLogSTD, SCALAR_n5, SCALAR_2));
-        Normal yawDist = new Normal(yawMean, yawStd);
-        yMeanForward.close();
+        Tensor continuousMeans = this.actorContinuousMeans.forward(hidden); // (batchSize, 2)
+        Tensor continuousStds = torch.exp(torch.clamp(this.actorContinuousLogSTD, SCALAR_n5, SCALAR_2)); // (2,)
+        Normal continuousDist = new Normal(continuousMeans, continuousStds);
 
-        Tensor pitchMeanForward = this.pitchMean.forward(hidden);
-        Tensor pitchMean = pitchMeanForward.squeeze(-1); // (batch, 1) -> (batch,)
-        Tensor pitchStd = torch.exp(torch.clamp(this.pitchLogSTD, SCALAR_n5, SCALAR_2));
-        Normal pitchDist = new Normal(pitchMean, pitchStd);
-        pitchMeanForward.close();
-
-        // Jump
-
-        Tensor jumpKeyLogits = this.actorJumpKey.forward(hidden);
-        Categorical jumpKeyProbs = new Categorical(jumpKeyLogits);
-
-        // Sprint & Sneak
-
-        Tensor sprintSneakKeysLogits = this.actorSprintSneakKeys.forward(hidden);
-        Categorical sprintSneakKeysProbs = new Categorical(sprintSneakKeysLogits);
-
-        // Attack & Use Item
-
-        Tensor attackUseItemLogits = this.actorAttackUseItem.forward(hidden);
-        Categorical attackUseItemProbs = new Categorical(attackUseItemLogits);
-
-        // Slot 0 or 1
-        Tensor slotLogits = this.actorSlot.forward(hidden);
-        Categorical slotProbs = new Categorical(slotLogits);
 
         /*
         if action is None:
@@ -516,100 +477,32 @@ public class MinecraftRL extends Module {
             rot_action = action[:, 2].to(rot_mean.dtype)
          */
 
-        Tensor forwardMoveKeysAction;
-        Tensor strafingMoveKeysAction;
-        Tensor yawAction;
-        Tensor pitchAction;
-        Tensor jumpKeyAction;
-        Tensor sprintSneakKeysAction;
-        Tensor attackUseItemAction;
-        Tensor slotAction;
+        Tensor categoricalActions;
+        Tensor continuousActions;
 
         if (action == null) {
-            forwardMoveKeysAction = forwardMoveKeysProbs.sample(); // LongTensor
-            strafingMoveKeysAction = strafingMoveKeysProbs.sample(); // LongTensor
-            yawAction = yawDist.sample(); // FloatTensor
-            pitchAction = pitchDist.sample(); // FloatTensor
-            jumpKeyAction = jumpKeyProbs.sample(); // LongTensor
-            sprintSneakKeysAction = sprintSneakKeysProbs.sample(); // LongTensor
-            attackUseItemAction = attackUseItemProbs.sample(); // LongTensor
-            slotAction = slotProbs.sample(); // LongTensor
+            categoricalActions = categoricalActionsProbs.sample(); // LongTensor
+            continuousActions = continuousDist.sample(); // FloatTensor
 
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
-            Tensor jumpFloat = jumpKeyAction.to(torch.ScalarType.Float);
-            Tensor sprintSneakFlaot = sprintSneakKeysAction.to(torch.ScalarType.Float);
-            Tensor forwardFloat = forwardMoveKeysAction.to(torch.ScalarType.Float);
-            Tensor strafingFloat = strafingMoveKeysAction.to(torch.ScalarType.Float);
-            Tensor useFloat = attackUseItemAction.to(torch.ScalarType.Float);
-            Tensor slotFloat = slotAction.to(torch.ScalarType.Float);
+            Tensor categoricalActionFloat = categoricalActions.to(torch.ScalarType.Float);
+
             TensorVector tensorVector = new TensorVector(
-                jumpFloat,
-                sprintSneakFlaot,
-                yawAction,
-                pitchAction,
-                forwardFloat,
-                strafingFloat,
-                useFloat,
-                slotFloat
+                categoricalActionFloat,
+                continuousActions
             );
-            action = torch.stack(tensorVector, 1); // (numEnvs,) x8 -> (numEnvs, 8)
-            jumpFloat.close();
-            sprintSneakFlaot.close();
-            forwardFloat.close();
-            strafingFloat.close();
-            useFloat.close();
-            slotFloat.close();
+            action = torch.cat(tensorVector, -1); // (numEnvs,) x8 -> (numEnvs, 8)
+            categoricalActionFloat.close();
             tensorVector.close();
         } else {
             // ! THIS MUST MATCH THE ORDER IN Action CLASS
+            Tensor categoricalActionsNarrow = action.narrow(-1, 0, OFFSET_LOOK_CHANGE); // (numEnvs, 8) -> (numEnvs, 6)
+            categoricalActions = categoricalActionsNarrow.to(torch.ScalarType.Long);
+            categoricalActionsNarrow.close();
 
-            Tensor jumpKeyNarrow = action.narrow(1, 0, 1); // (numEnvs, 8) -> (numEnvs, 1)
-            Tensor jumpKeySqueeze = jumpKeyNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
-            jumpKeyAction = jumpKeySqueeze.to(torch.ScalarType.Long);
-            jumpKeyNarrow.close();
-            jumpKeySqueeze.close();
-
-            Tensor sprintSneakKeysNarrow = action.narrow(1, 1, 1); // (numEnvs, 8) -> (numEnvs, 1)
-            Tensor sprintSneakKeysSqueeze = sprintSneakKeysNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
-            sprintSneakKeysAction = sprintSneakKeysSqueeze.to(torch.ScalarType.Long);
-            sprintSneakKeysNarrow.close();
-            sprintSneakKeysSqueeze.close();
-
-            Tensor yawNarrow = action.narrow(1, 2, 1); // (numEnvs, 8) -> (numEnvs, 1)
-            Tensor yawSqueeze = yawNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
-            yawAction = yawSqueeze.to(yawMean.dtype());
-            yawNarrow.close();
-            yawSqueeze.close();
-
-            Tensor pitchNarrow = action.narrow(1, 3, 1); // (numEnvs, 8) -> (numEnvs, 1)
-            Tensor pitchSqueeze = pitchNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
-            pitchAction = pitchSqueeze.to(pitchMean.dtype());
-            pitchNarrow.close();
-            pitchSqueeze.close();
-
-            Tensor forwardMoveKeysNarrow = action.narrow(1, 4, 1); // (numEnvs, 8) -> (numEnvs, 1)
-            Tensor forwardMoveKeysSqueeze = forwardMoveKeysNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
-            forwardMoveKeysAction = forwardMoveKeysSqueeze.to(torch.ScalarType.Long);
-            forwardMoveKeysNarrow.close();
-            forwardMoveKeysSqueeze.close();
-
-            Tensor strafingMoveKeysNarrow = action.narrow(1, 5, 1); // (numEnvs, 8) -> (numEnvs, 1)
-            Tensor strafingMoveKeysSqueeze = strafingMoveKeysNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
-            strafingMoveKeysAction = strafingMoveKeysSqueeze.to(torch.ScalarType.Long);
-            strafingMoveKeysNarrow.close();
-            strafingMoveKeysSqueeze.close();
-
-            Tensor attackUseItemNarrow = action.narrow(1, 6, 1); // (numEnvs, 8) -> (numEnvs, 1)
-            Tensor attackUseItemSqueeze = attackUseItemNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
-            attackUseItemAction = attackUseItemSqueeze.to(torch.ScalarType.Long);
-            attackUseItemNarrow.close();
-            attackUseItemSqueeze.close();
-
-            Tensor slotNarrow = action.narrow(1, 7, 1); // (numEnvs, 8) -> (numEnvs, 1)
-            Tensor slotSqueeze = slotNarrow.squeeze(1); // (numEnvs, 1) -> (numEnvs,)
-            slotAction = slotSqueeze.to(torch.ScalarType.Long);
-            slotNarrow.close();
-            slotSqueeze.close();
+            Tensor continuousActionsNarrow = action.narrow(1, OFFSET_LOOK_CHANGE, SIZE_LOOK_CHANGE); // (numEnvs, 8) -> (numEnvs, 2)
+            continuousActions = continuousActionsNarrow.to(continuousMeans.dtype());
+            continuousActionsNarrow.close();
         }
 
         /*
@@ -620,61 +513,36 @@ public class MinecraftRL extends Module {
         logprobs = x_logprob + y_logprob + rot_logprob
          */
 
-        Tensor forwardMoveKeysLogProbs = forwardMoveKeysProbs.logProb(forwardMoveKeysAction);
-        Tensor strafingMoveKeysLogProbs = strafingMoveKeysProbs.logProb(strafingMoveKeysAction);
-        Tensor yawLogProbs = yawDist.logProb(yawAction);
-        Tensor pitchLogProbs = pitchDist.logProb(pitchAction);
-        Tensor jumpKeyLogProbs = jumpKeyProbs.logProb(jumpKeyAction);
-        Tensor sprintSneakKeysLogProbs = sprintSneakKeysProbs.logProb(sprintSneakKeysAction);
-        Tensor attackUseItemLogProbs = attackUseItemProbs.logProb(attackUseItemAction);
-        Tensor slotLogProbs = slotProbs.logProb(slotAction);
+        Tensor categoricalActionsLogProbs = categoricalActionsProbs.logProb(categoricalActions);
+        Tensor continuousActionsLogProbs = continuousDist.logProb(continuousActions);
 
-        Tensor totalLogProbs = forwardMoveKeysLogProbs
-            .add(strafingMoveKeysLogProbs)
-            .add_(yawLogProbs)
-            .add_(pitchLogProbs)
-            .add_(jumpKeyLogProbs)
-            .add_(sprintSneakKeysLogProbs)
-            .add_(attackUseItemLogProbs)
-            .add_(slotLogProbs);
-        forwardMoveKeysLogProbs.close();
-        strafingMoveKeysLogProbs.close();
-        yawLogProbs.close();
-        pitchLogProbs.close();
-        jumpKeyLogProbs.close();
-        sprintSneakKeysLogProbs.close();
-        attackUseItemLogProbs.close();
-        slotLogProbs.close();
+        Tensor categoricalLogProbsSum = categoricalActionsLogProbs.sum(-1);
+        Tensor continuousLogProbsSum = continuousActionsLogProbs.sum(-1);
+
+        Tensor totalLogProbs = categoricalLogProbsSum.add(continuousLogProbsSum);
+
+        categoricalActionsLogProbs.close();
+        continuousActions.close();
+        categoricalLogProbsSum.close();
+        continuousLogProbsSum.close();
 
         /*
         entropy = x_probs.entropy() + y_probs.entropy() + rot_dist.entropy()
          */
 
-        Tensor forwardMoveKeysEntropy = forwardMoveKeysProbs.entropy();
-        Tensor strafingMoveKeysEntropy = strafingMoveKeysProbs.entropy();
-        Tensor yawEntropy = yawDist.entropy();
-        Tensor pitchEntropy = pitchDist.entropy();
-        Tensor jumpKeyEntropy = jumpKeyProbs.entropy();
-        Tensor sprintSneakKeysEntropy = sprintSneakKeysProbs.entropy();
-        Tensor attackUseItemEntropy = attackUseItemProbs.entropy();
-        Tensor slotEntropy = slotProbs.entropy();
+        Tensor categoricalActionEntropy = categoricalActionsProbs.entropy();
+        Tensor continuousActionEntropy = continuousDist.entropy();
 
-        Tensor totalEntropy = forwardMoveKeysEntropy
-            .add(strafingMoveKeysEntropy)
-            .add_(yawEntropy)
-            .add_(pitchEntropy)
-            .add_(jumpKeyEntropy)
-            .add_(sprintSneakKeysEntropy)
-            .add_(attackUseItemEntropy)
-            .add_(slotEntropy);
-        forwardMoveKeysEntropy.close();
-        strafingMoveKeysEntropy.close();
-        yawEntropy.close();
-        pitchEntropy.close();
-        jumpKeyEntropy.close();
-        sprintSneakKeysEntropy.close();
-        attackUseItemEntropy.close();
-        slotEntropy.close();
+        Tensor categoricalEntorpySum = categoricalActionEntropy.sum(-1);
+        Tensor continuousEntropySum = continuousActionEntropy.sum(-1);
+
+        Tensor totalEntropy = categoricalEntorpySum
+            .add(continuousEntropySum);
+
+        categoricalActionEntropy.close();
+        continuousActionEntropy.close();
+        categoricalEntorpySum.close();
+        continuousEntropySum.close();
 
         /*
         return (
@@ -688,22 +556,10 @@ public class MinecraftRL extends Module {
 
         Tensor value = this.critic.forward(hidden);
 
-        forwardMoveKeysProbs.close();
-        strafingMoveKeysProbs.close();
-        yawDist.close();
-        pitchDist.close();
-        jumpKeyProbs.close();
-        sprintSneakKeysProbs.close();
-        attackUseItemProbs.close();
-        slotProbs.close();
-        forwardMoveKeysAction.close();
-        strafingMoveKeysAction.close();
-        yawAction.close();
-        pitchAction.close();
-        jumpKeyAction.close();
-        sprintSneakKeysAction.close();
-        attackUseItemAction.close();
-        slotAction.close();
+        categoricalActionsProbs.close();
+        continuousDist.close();
+        categoricalActions.close();
+        continuousActions.close();
 
         action.retainReference();
         totalLogProbs.retainReference();
